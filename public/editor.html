@@ -1,0 +1,53 @@
+<html>
+    <body style="width:100%; height:100%;margin:0px; overflow: hidden;">
+        <script src="./urlJoin.js"></script>
+        <script src="./jquery.min.js"></script>
+        <script src="editormd/editormd.min.js"></script>
+        <script src="./md_english.js"></script>
+        <link rel="stylesheet" href="editormd/css/editormd.css" />
+        <div id="test-editor" style="width:100%; height:100%;">
+            <textarea></textarea>
+        </div>
+        <script>
+        var editor = editormd("test-editor", 
+        {
+            path : "editormd/lib/",
+            width  : "calc(100%)",
+            height : "100%",
+            theme: "dark",
+            previewTheme: "dark",
+            editorTheme: "pastel-on-dark",
+            // onchange: () =>
+            // { 
+            //     console.log(this);
+            //     this.saveNote(urlJoin(currentPath, "/"), currentNoteName, editor.getValue()); 
+            // }
+            // onchange: this.saveNote
+        });   
+        setTimeout(function () 
+        {         
+            editor.settings.taskList = true;
+            //var iconsIDToHide = [2,3,4,10,11,12,13,14];
+            var iconsIDToKeep = [0,1,5,15,16,17,18,19,20,26,30,31,32];
+            
+            for (let i = 0; i < editor.toolbarIcons.length; i++) 
+            {
+                if (iconsIDToKeep.includes(i)) continue;
+                editor.toolbarIcons[i].style.display = "none";                
+                editor.toolbarIcons[i].parentNode.style.paddingLeft = "0px";
+                editor.toolbarIcons[i].parentNode.style.paddingRight = "0px";
+            }
+
+            $(".divider")[2].style.display = "none";
+
+            // //editor.previewing();
+        }, 1000);
+        </script>
+        <style>
+        #test-editor > .CodeMirror { border-right: 1px solid #222222 !important; }
+        .CodeMirror-scroll { overflow-x: hidden !important; }
+        </style>
+        <!-- Style for up down split -->
+        
+    </body>
+</html>
