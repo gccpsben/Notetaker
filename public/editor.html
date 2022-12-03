@@ -2,7 +2,7 @@
     <body style="width:100%; height:100%;margin:0px; overflow: hidden;">
         <script src="./urlJoin.js"></script>
         <script src="./jquery.min.js"></script>
-        <script src="editormd/editormd.min.js"></script>
+        <script src="editormd/editormd.js"></script>
         <script src="./md_english.js"></script>
         <link rel="stylesheet" href="editormd/css/editormd.css" />
         <div id="test-editor" style="width:100%; height:100%;">
@@ -42,12 +42,97 @@
 
             // //editor.previewing();
         }, 1000);
+        
+        // window.addEventListener('paste', ... or
+        document.onpaste = function(event)
+        {
+            var items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            console.log(JSON.stringify(items)); // will give you the mime types
+            for (index in items) 
+            {
+                var item = items[index];
+                if (item.kind === 'file') 
+                {
+                    var blob = item.getAsFile();
+                    var reader = new FileReader();
+                    reader.onload = function(event)
+                    {
+                        window.top.postMessage(
+                        {
+                            name: "imagePasted",
+                            base64: event.target.result
+                        });
+                    }; // data url!
+                    reader.readAsDataURL(blob);
+                }
+            }
+        }
+
         </script>
         <style>
         #test-editor > .CodeMirror { border-right: 1px solid #222222 !important; }
         .CodeMirror-scroll { overflow-x: hidden !important; }
+        .task-list-item-checkbox.notChecked { accent-color: #9b59b6; color:transparent; }
+        .task-list-item-checkbox.checked { accent-color: #062400; color:red; }
+        
+        .customCheckbox
+        { 
+            cursor: pointer; -webkit-appearance: none; appearance: none; margin: 0; 
+            border: 1px solid currentColor; place-content: center;
+            font: inherit;
+            transform: translateY(1px);
+            height: 15px; width: 15px; display: inline-block;
+            margin-right: 5px !important;
+            border-radius: 15px; border-color:red;
+        }
+        .customCheckbox:checked {  border-color:green; }
+        .customCheckbox.partiallyChecked {  border-color:rgb(255, 167, 2); }
+        .customCheckbox.waitingForAction {  border-color:rgb(68, 68, 68); }
+        .customCheckbox::before
+        {
+            content: "";
+            width: 100%;
+            height: 100%;
+            display: inline-block;
+            background-color: red;
+            transform: scale(0.86) translateX(0px) translateY(0px);
+            clip-path: polygon(20% 9%, 48% 34%, 75% 6%, 89% 21%, 63% 49%, 90% 76%, 77% 90%, 48% 65%, 22% 91%, 7% 76%, 32% 49%, 6% 23%);
+        }
+        .customCheckbox:checked::before
+        {
+            content: "";
+            width: 100%;
+            height: 100%;
+            transform: scale(1) !important;
+            clip-path: polygon(23% 48%, 37% 62%, 79% 18%, 89% 30%, 37% 84%, 12% 59%) ;
+            transform-origin: bottom left;
+            background-color: green;
+            display: inline-block;
+        }
+        .customCheckbox.partiallyChecked::before
+        {
+            content: "";
+            width: 100%;
+            height: 100%;
+            transform: scale(1) !important;
+            clip-path: polygon(14% 59%, 14% 55%, 15% 51%, 16% 46%, 18% 42%, 21% 38%, 26% 35%, 32% 34%, 39% 34%, 45% 37%, 51% 41%, 56% 46%, 61% 50%, 67% 50%, 70% 46%, 71% 39%, 84% 39%, 83% 50%, 80% 57%, 76% 61%, 72% 63%, 64% 65%, 56% 64%, 51% 60%, 46% 56%, 42% 52%, 38% 49%, 32% 48%, 28% 53%, 28% 59%) ;
+            transform-origin: bottom left;
+            background-color: rgb(255, 167, 2);
+            display: inline-block;
+        }
+        .customCheckbox.waitingForAction::before
+        {
+            content: "";
+            width: 100%;
+            height: 100%;
+            transform: scale(1) !important;
+            clip-path: polygon(0% 0%) ;
+            transform-origin: bottom left;
+            background-color: rgb(68, 68, 68);
+            display: inline-block;
+        }
         </style>
         <!-- Style for up down split -->
-        
+
     </body>
 </html>

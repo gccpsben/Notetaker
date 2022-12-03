@@ -205,26 +205,46 @@ module.exports.renameFolder = async (pathDirectory, oldName, newName) =>
 {   
     var directoryToBeSaved = urlJoin(pathDirectory, "/")
     var isNameUsed = await module.exports.isFolderDuplicate(directoryToBeSaved, newName);
+    var notesCollection = dbNames["notesCollection"].collectionInstance;
 
     if (isNameUsed) throw new FileExistsError(pathDirectory, newName);
     else if (await module.exports.isFolderExist(directoryToBeSaved, oldName) == false) throw new FileNotExistsError(pathDirectory, oldName);
 
-    const filter = 
+    //#region Update folder name of the folder object
+    const initFilter = 
     {
         name: sanitize(oldName),
         type: sanitize("folder"),
         directory: sanitize(directoryToBeSaved)
     };
 
-    const query = 
-    { 
-        "$set":
-        {
-            name: sanitize(newName)
-        }
-    }
+    const initQuery = { "$set": { name: sanitize(newName) } }
 
-    return await dbNames["notesCollection"].collectionInstance.updateOne(filter, query);
+    await notesCollection.updateOne(initFilter, initQuery);
+    //#endregion
+
+    //#region Update the path of all files in the folder
+    //var filterRegex = new RegExp(`/^${urlJoin(pathDirectory,oldName).replace('/','\\/')}/`);
+    var inner = urlJoin(pathDirectory,oldName);
+    var filterRegex =  new RegExp(`^\\${inner}`);
+    const subseqFilter = 
+    {
+        directory: filterRegex
+    };
+
+    await (await notesCollection.find(subseqFilter).toArray()).forEach(async (document) => 
+    {
+        notesCollection.updateOne({_id: document._id}, 
+        {
+            $set: 
+            {
+                "directory": document.directory.replace(filterRegex, urlJoin(pathDirectory, newName))
+            }
+        })
+    });
+
+    return true;
+    //#endregion
 }
 
 /**

@@ -3480,7 +3480,8 @@
             return text;
         };
 
-        markedRenderer.atLink = function(text) {
+        markedRenderer.atLink = function(text) 
+        {
 
             if (atLinkReg.test(text))
             { 
@@ -3497,7 +3498,8 @@
                 
                 if (settings.emailLink)
                 {
-                    text = text.replace(emailLinkReg, function($1, $2, $3, $4, $5) {
+                    text = text.replace(emailLinkReg, function($1, $2, $3, $4, $5) 
+                    {
                         return (!$2 && $.inArray($5, "jpg|jpeg|png|gif|webp|ico|icon|pdf".split("|")) < 0) ? "<a href=\"mailto:" + $1 + "\">"+$1+"</a>" : $1;
                     });
                 }
@@ -3640,18 +3642,30 @@
             }
         };
 
-        markedRenderer.tablecell = function(content, flags) {
+        markedRenderer.tablecell = function(content, flags) 
+        {
             var type = (flags.header) ? "th" : "td";
             var tag  = (flags.align)  ? "<" + type +" style=\"text-align:" + flags.align + "\">" : "<" + type + ">";
             
             return tag + this.atLink(this.emoji(content)) + "</" + type + ">\n";
         };
 
-        markedRenderer.listitem = function(text) {
-            if (settings.taskList && /^\s*\[[x\s]\]\s*/.test(text)) 
+        markedRenderer.listitem = function(text) 
+        {
+            var checkedCheckboxHTML = `<input type="checkbox" class="customCheckbox" onclick="return false" checked>`;
+
+            var notCheckedCheckboxHTML = `<input type="checkbox" class="customCheckbox" onclick="return false" >`;
+
+            var partiallyCheckedCheckboxHTML = `<input type="checkbox" class="customCheckbox partiallyChecked" onclick="return false" >`;
+
+            var waitingCheckboxHTML = `<input type="checkbox" class="customCheckbox waitingForAction" onclick="return false" >`;
+
+            if (settings.taskList && /^\s*\[[~xF\s]\]\s*/.test(text))
             {
-                text = text.replace(/^\s*\[\s\]\s*/, "<input type=\"checkbox\" class=\"task-list-item-checkbox\" /> ")
-                           .replace(/^\s*\[x\]\s*/,  "<input type=\"checkbox\" class=\"task-list-item-checkbox\" checked disabled /> ");
+                text = text.replace(/^\s*\[F\]\s*/, notCheckedCheckboxHTML)
+                           .replace(/^\s*\[x\]\s*/,  checkedCheckboxHTML)
+                           .replace(/^\s*\[~\]\s*/,  partiallyCheckedCheckboxHTML)
+                           .replace(/^\s*\[\s]\s*/,  waitingCheckboxHTML);
 
                 return "<li style=\"list-style: none;\">" + this.atLink(this.emoji(text)) + "</li>";
             }

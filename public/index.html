@@ -30,6 +30,31 @@
                 </div>
             </div>
 
+            <div v-if="currentPastedMedia != undefined">
+                <div v-if="currentPastedMedia.type == 'image'">
+                    <div class="maxCenter" style="position:fixed; background:#000000AA; z-index:999;">
+                        <div style="width:500px; height:500px; background:#333333; border-radius: 5px; display:grid; grid-template-columns: 1fr; grid-template-rows: 45px 1fr 45px; grid-template-areas: 'top' 'content' 'bottom';">
+                            <div class="verticallyCenter" style="grid-area:top; padding:15px;">
+                                <h1 style="color:white; margin:0px; padding:0px; font-size:15px; font-weight: 100;">Upload and insert this image?</h1>
+                            </div>
+                            <div style="grid-area:content; width:100%; background:#222222;">
+                                <div :style="{'background-image': `url(${currentPastedMedia.base64})`}" style="width:100%; height:100%; background-size: contain; background-position: center; background-repeat: no-repeat;"></div>
+                            </div>
+                            <div class="maxCenter" style="grid-area:bottom; width:100%;">
+                                <center>
+                                    <button v-on:click="uploadMedia(currentPastedMedia)" class="pasteModelConfirmButton">
+                                        <span style="color:white; font-size: 20px; transform:translateY(1px)" class="material-icons">done</span>
+                                    </button>
+                                    <button v-on:click="currentPastedMedia = undefined" class="pasteModelConfirmButton" style="margin:0px;">
+                                        <span style="color:white; font-size: 20px; transform:translateY(1px)" class="material-icons">close</span>
+                                    </button>
+                                </center>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div :style="{'display':isSocketDisconnected? 'none' : 'grid'}" style="grid-template-columns: minmax(300px,0.25fr) 1fr; grid-template-rows:1fr; 
             grid-template-areas: 'left right'; width:100%; height:100%;">
 
@@ -47,7 +72,7 @@
 
                     <div style="grid-area: top; border-bottom:1px solid #333333; position: relative;" class="verticallyCenter horiCenter">
                         <div v-on:click="goUpFolder()" style="position:absolute; left:15px; cursor:pointer;">
-                            <span :class="{'materialIconDisabled':currentPath=='/'}" style="color:white; font-size: 20px; transform:translateY(2px)" class="material-icons">chevron_left</span>
+                            <span :class="{'materialIconDisabled':currentPath=='/'}" style="user-select: none; color:white; font-size: 20px; transform:translateY(2px)" class="material-icons">chevron_left</span>
                         </div>
                         <h1 class="h1Min">{{currentPathShortName}}</h1>
                         <div style="position:absolute; right:15px; cursor:pointer;">
@@ -125,6 +150,10 @@
         {
             methods:
             {
+                uploadMedia(currentPastedObjectJSON)
+                {
+                    alert("not done haha");
+                },
                 renameNote(oldName, newName)
                 {
                     var path = urlJoin(this.currentPath, "/");
@@ -195,7 +224,7 @@
                         {
                             this.currentPathFiles = JSON.parse(data);
                             self.isDirectoryLoading = false;
-                        }, 500);
+                        }, 100);
                         //setTimeout(updateFilesSelector, 100);
                     })
                     // there's problem fetching data from server
@@ -454,7 +483,9 @@
                     currentSearchWords: "",
                     
                     contextMenuTarget: undefined,
-                    window: window
+                    window: window,
+
+                    currentPastedMedia: undefined
                 }
                 return d;
             },
@@ -539,6 +570,19 @@
                     }, false);
                 } 
 
+                // Listen for postMessage event coming from the editor iframe when images are pasted.
+                window.onmessage = function(e) 
+                {
+                    if (e.data.name == 'imagePasted') 
+                    {
+                        self.currentPastedMedia = 
+                        {
+                            "type": "image",
+                            "base64": e.data.base64
+                        };
+                    }
+                };
+
                 // this.editor = editormd("test-editor", 
                 // {
                 //     path : "editormd/lib/",
@@ -580,6 +624,15 @@
             width: 32px;
             background: url("loadingIcon.png");
             background-size: contain;
+        }
+        .pasteModelConfirmButton 
+        { 
+            background: rgb(34, 34, 34); border: 0px none; margin-right: 15px;padding: 4px 10px 4px 10px; 
+            border:1px #333333 solid; border-radius: 3px;
+        }
+        .pasteModelConfirmButton:hover
+        { 
+            background: #444444; cursor: pointer;
         }
         @keyframes loadingIcon
         {
