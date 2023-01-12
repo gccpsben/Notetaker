@@ -41,10 +41,11 @@ module.exports = async (connectionUrlString) =>
 {
     dbClient = new MongoClient.MongoClient(connectionUrlString);
     await dbClient.connect();
-    dbInstance = dbClient.db(dbNames["notesCollectionName"]);
+    dbInstance = dbClient.db();
     await dbInstance.command({ ping: 1 }); // Establish and verify connection
     dbNames["notesCollection"].collectionInstance = await dbInstance.collection("Notes");
     logGreen("Connected to database.");
+    module.exports.dbInstance = dbInstance;
 }
 
 module.exports.isNoteExist = async (directory, noteName) => 
@@ -74,6 +75,27 @@ module.exports.isFolderExist = async (directory, noteName) =>
     var found = (await obj).length != 0;
     return found;
 }
+
+module.exports.uploadImage = async (base64) =>
+{
+    var documentBody = 
+    {
+        base64: base64
+    };
+    var doc = await dbInstance.collection("images").insertOne(documentBody);
+    return doc.insertedId;
+}
+
+module.exports.getImage = async (id) => 
+{
+    try 
+    {
+        var document = await dbInstance.collection("images").find({_id:new MongoClient.ObjectId(id)}).toArray();
+        if (document.length == 0) throw new Error("Cannot find the document.");
+        return document[0].base64;
+    }
+    catch(e) { throw e; }
+};
 
 module.exports.updateNote = async (newContent, directory, noteName) =>
 {
@@ -193,6 +215,8 @@ module.exports.createNote = async (content, pathDirectory, name) =>
 
     return await dbNames["notesCollection"].collectionInstance.updateOne(filter, query);
  }
+
+
 
  /**
  * Rename a folder in a given path.

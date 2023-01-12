@@ -1,13 +1,17 @@
+<!DOCTYPE html>
 <html>
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap" rel="stylesheet">
+        <style> @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap'); </style>
         <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
         <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
         <script src="./urlJoin.js"></script>
         <script src="./jquery.min.js"></script>
-        <script src="editormd/editormd.min.js"></script>
-        <script src="./md_english.js"></script>
     </head>
-    <body style="margin:0px; background: #222222">
+    <body style="margin:0px; background: #1a1a17;">
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
         
         <div id="app">
@@ -33,7 +37,7 @@
             <div v-if="currentPastedMedia != undefined">
                 <div v-if="currentPastedMedia.type == 'image'">
                     <div class="maxCenter" style="position:fixed; background:#000000AA; z-index:999;">
-                        <div style="width:500px; height:500px; background:#333333; border-radius: 5px; display:grid; grid-template-columns: 1fr; grid-template-rows: 45px 1fr 45px; grid-template-areas: 'top' 'content' 'bottom';">
+                        <div style="width:500px; height:500px; background:#333333; border-radius: 5px; display:grid; grid-template-columns: 1fr; grid-template-rows: 45px 1fr 43px; grid-template-areas: 'top' 'content' 'bottom';">
                             <div class="verticallyCenter" style="grid-area:top; padding:15px;">
                                 <h1 style="color:white; margin:0px; padding:0px; font-size:15px; font-weight: 100;">Upload and insert this image?</h1>
                             </div>
@@ -55,19 +59,28 @@
                 </div>
             </div>
 
-            <div :style="{'display':isSocketDisconnected? 'none' : 'grid'}" style="grid-template-columns: minmax(300px,0.25fr) 1fr; grid-template-rows:1fr; 
-            grid-template-areas: 'left right'; width:100%; height:100%;">
+            <div id="mainGrid" v-show="isLoggedIn" :class="{ 'leftPanelHidden':pageWidth <= maxWidthToBeMobile ? currentNoteName != undefined : false, 'rightPanelHidden':pageWidth <= maxWidthToBeMobile ? currentNoteName == undefined : false }">
 
-                <div style="margin:0px; grid-area: right; position:relative;">
-                    <div v-show="currentNoteName == undefined" class="horiCenter verticallyCenter" style="width:100%; height:100%; background:#222222">
-                        <h1 style="font-size:25px; color:#999999; margin:0px; font-weight: 100;">Please Select A Note</h1>
+                <div v-show="!isSocketDisconnected" style="margin:0px; grid-area: right; position:relative; overflow: hidden;">
+                    <div v-show="currentNoteName == undefined" class="maxCenter" style="background:#222222">
+                        <div>
+                            <center><span class="material-icons" style="color: #fff; font-size: 100px; margin-bottom: 20px; ">file_open</span></center>
+                            <center><h1 style="font-size:20px; color:#fff; margin:0px; font-weight: 100;">Open a note to continue</h1></center>
+                        </div>
                     </div>
                     <div :style="{'opacity':(currentNoteName ? 1:0)}" style="margin:0px; position:absolute; bottom:0px; top:0px; left:0; right:0;">
                         <iframe id="editorIframe" src="./editor.html" style="border:0px; width:100%; height:100%;"></iframe>
                     </div>
                 </div>
 
-                <div class="fullSize" style="margin:0px; grid-area: left; display:grid; grid-template-columns: 1fr; grid-template-rows:42px 42px 1fr 42px; 
+                <div v-show="isSocketDisconnected" class="maxCenter" style="margin:0px; grid-area: right; position:relative;">
+                    <div>
+                        <center><span class="material-icons" style="color: #ffb6b6; font-size: 100px;">wifi_off</span></center>
+                        <center><h1 style="font-size:20px; color:#ffb6b6; margin:0px; font-weight: 100;">Connection Lost...</h1></center>
+                    </div>
+                </div>
+
+                <div class="fullSize" style="overflow: hidden; margin:0px; grid-area: left; display:grid; grid-template-columns: 1fr; grid-template-rows:42px 42px 1fr 30px; 
                 grid-template-areas: 'top' 'search' 'content' 'bottom'; background:#1a1a17;">
 
                     <div style="grid-area: top; border-bottom:1px solid #333333; position: relative;" class="verticallyCenter horiCenter">
@@ -76,8 +89,8 @@
                         </div>
                         <h1 class="h1Min">{{currentPathShortName}}</h1>
                         <div style="position:absolute; right:15px; cursor:pointer;">
-                            <span v-on:click="createNote()" style="color:white; font-size: 20px; transform:translateY(1px)" class="material-icons">note</span>
-                            <span v-on:click="createFolder()" style="color:white; margin-left:15px; font-size: 20px; transform:translateY(1px)" class="material-icons">folder</span>
+                            <span v-on:click="createNote()" style="color:white; font-size: 20px; transform:translateY(1px)" class="material-icons">note_add</span>
+                            <span v-on:click="createFolder()" style="color:white; margin-left:15px; font-size: 20px; transform:translateY(1px)" class="material-icons">create_new_folder</span>
                         </div>
                     </div>
 
@@ -125,21 +138,42 @@
                         </div>
                     </div>
 
-                    <div style="grid-area: bottom; background:#1a1a17; border-top:1px solid #333333;" class="verticallyCenter horiCenter">
-                        <h1 class="h1Min">BOTTOM</h1>
+                    <div style="grid-area: bottom; background:#1a1a17; border-top:1px solid #333333; position:relative" class="verticallyCenter">
+                        <div style="position:absolute; color:white; width:100%; height:100%;">
+                            <div class="maxCenter" style="font-size:14px;">{{currentTimeString}}</div>
+                        </div>
+                        <div style="position:absolute; right:0px; padding-left:15px; padding-right:15px; font-size: 15px;">
+                            <span v-if="!isSocketDisconnected" style="font-size:inherit; color:lightgreen;" class="material-icons">wifi_password</span>
+                            <span v-if="isSocketDisconnected" style="font-size:inherit; color:red;" class="material-icons">wifi_off</span>
+                        </div>
+                        <div style="position:absolute; left:0px; padding-left:15px; padding-right:15px; ">
+                            <span style="color:white; font-size: 15px;" class="material-icons">settings</span>
+                        </div>
                     </div>
 
                 </div>
             </div>
 
-            <div v-if="isSocketDisconnected" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+            <div id="loginGrid" v-if="!isLoggedIn" style="height:100%; display:flex; justify-content:center; align-items:center;">
+                <div style="width:500px; height:500px; background:#222222; border-radius: 15px;">
+                    <div style="display:grid; height:100%; grid-template-rows: 1fr 45px 45px 60px 1fr; grid-template-columns: 1fr;">
+                        <div></div>
+                        <div class="maxCenter"><input v-model="loginUsername" placeholder="Username..."/></div>
+                        <div class="maxCenter"><input v-model="loginPassword" placeholder="Password..." type="password"/></div>
+                        <div class="maxCenter"><button style="width:50px; height:30px;" @click="login">Login</button></div>
+                        <div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- <div v-if="isSocketDisconnected" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
                 <div>
                     <h1 style="color:#4e5773; font-weight:100;">Lost Connection...</h1>
                     <center>
                         <button style="border:1px solid #333333; padding:5px; font-size:15px; background:#222222; color:white;">Reconnect</button>
                     </center>
                 </div>
-            </div>
+            </div> -->
 
         </div>
 
@@ -150,6 +184,117 @@
         {
             methods:
             {
+                login()
+                {
+                    var self = this;
+                    var fetchOptions = 
+                    {
+                        method: "POST", headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(
+                        {
+                            username:self.loginUsername, password:self.loginPassword
+                        })
+                    };
+                    fetch("/login", fetchOptions)
+                    .then(response => 
+                    {
+                        if (response.status == 401) { alert("Incorrect password or username."); return; }
+                        return response.json();
+                    })
+                    .then(dataJSON => 
+                    {
+                        alert(dataJSON);
+                        self.setCookie("token", dataJSON.token, 7);
+                        self.setCookie("username", self.loginUsername, 7);
+                        window.location.reload();
+                    });
+                },
+                isAuthAvailable()
+                {
+                    return this.getCookie("token") != null && this.getCookie("username") != null;
+                },
+                authPost(url, body, noRefresh=false)
+                {
+                    var self = this;
+                    var queryURL = `${url}`;
+
+                    return fetch(queryURL,
+                    {
+                        method: "POST", headers: 
+                        { 
+                            'Content-Type': 'application/json',
+                            "authorization": self.getCookie("token"),
+                            "auth-username": self.getCookie("username")
+                        },
+                        body: JSON.stringify(body)
+                    }).then(response => 
+                    {
+                        if (response.status == 401 && noRefresh == false) self.resetSession();
+                        else return response.text();
+                    });
+                },
+                authGet(url)
+                {
+                    var self = this;
+                    var queryURL = `${url}`;
+
+                    return fetch(queryURL, 
+                    {
+                        method: "GET",
+                        headers: 
+                        {
+                            "authorization": self.getCookie("token"),
+                            "auth-username": self.getCookie("username")
+                        }
+                    }).then(response => 
+                    {
+                        if (response.status == 401) self.resetSession();
+                        else return response.text();
+                    });
+                },
+                resetSession()
+                {
+                    this.eraseCookie("token");
+                    this.eraseCookie("username");
+                    window.location.reload();
+                },
+                setCookie(name,value,days) 
+                {
+                    var expires = "";
+                    if (days) 
+                    {
+                        var date = new Date();
+                        date.setTime(date.getTime() + (days*24*60*60*1000));
+                        expires = "; expires=" + date.toUTCString();
+                    }
+                    document.cookie = name + "=" + (value || "")  + expires + "; path=/;SameSite=Lax";
+                },
+                getCookie(name) 
+                {
+                    var nameEQ = name + "=";
+                    var ca = document.cookie.split(';');
+                    for(var i=0;i < ca.length;i++) {
+                        var c = ca[i];
+                        while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+                    }
+                    return null;
+                },
+                eraseCookie(name) 
+                {
+                    document.cookie = name+'=; Max-Age=-99999999;';
+                },
+                updateToolbarMode()
+                {
+                    var self = this;
+                    var oldToolbarMode = self.editor.settings.toolbarIcons;
+                    self.pageHeight = window.innerHeight;
+                    self.pageWidth = window.innerWidth;
+
+                    if (self.pageWidth <= self.maxWidthToBeMobile) self.editor.settings.toolbarIcons = "defaultMobile";
+                    else self.editor.settings.toolbarIcons = "defaultFull";
+                    if (oldToolbarMode != self.editor.settings.toolbarIcons) self.editor.setToolbar();
+                },
                 uploadMedia(currentPastedObjectJSON)
                 {
                     alert("not done haha");
@@ -159,54 +304,31 @@
                     var path = urlJoin(this.currentPath, "/");
                     var self = this;
                     
-                    fetch("./renameNote", 
+                    self.authPost("./renameNote", 
                     {
-                        method: "POST", headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(
-                        {
-                            path: path,
-                            oldName: oldName,
-                            newName: newName,
-                            socketIoId: this.socket.io.engine.id
-                        })
+                        path: path,
+                        oldName: oldName,
+                        newName: newName,
+                        socketIoId: this.socket.io.engine.id
                     })
                     .then(response => response.text())
-                    .then(data => 
-                    {
-                        //alert(JSON.stringify(data));
-                    })
-                    .catch((e) => 
-                    {
-                        alert(e);
-                        //self.isSocketDisconnected = true;
-                    });
+                    .then(data => { })
+                    .catch((e) => { alert(e); });
                 },
                 renameFolder(oldName, newName)
                 {
                     var path = urlJoin(this.currentPath, "/");
                     var self = this;
                     
-                    fetch("./renameFolder", 
+                    self.authPost("./renameFolder", 
                     {
-                        method: "POST", headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(
-                        {
-                            path: path,
-                            oldName: oldName,
-                            newName: newName,
-                            socketIoId: this.socket.io.engine.id
-                        })
+                        path: path,
+                        oldName: oldName,
+                        newName: newName,
+                        socketIoId: this.socket.io.engine.id
                     })
-                    .then(response => response.text())
-                    .then(data => 
-                    {
-                        //alert(JSON.stringify(data));
-                    })
-                    .catch((e) => 
-                    {
-                        alert(e);
-                        //self.isSocketDisconnected = true;
-                    });
+                    .then(data => { })
+                    .catch((e) => { alert(e); });
                 },
                 updateCurrentDirectoryFiles()
                 {
@@ -215,17 +337,15 @@
                     var queryURL = `./listDir?path=${path}`;
                     var self = this;
                     
-                    this.isDirectoryLoading = true;
-                    fetch(queryURL)
-                    .then(response => response.text())
+                    self.isDirectoryLoading = true;
+                    self.authGet(queryURL)
                     .then(data => 
                     {
                         setTimeout(() => 
                         {
-                            this.currentPathFiles = JSON.parse(data);
+                            self.currentPathFiles = JSON.parse(data);
                             self.isDirectoryLoading = false;
                         }, 100);
-                        //setTimeout(updateFilesSelector, 100);
                     })
                     // there's problem fetching data from server
                     .catch(() => 
@@ -248,25 +368,24 @@
                 },
                 saveNote: function()
                 {
+                    document.title = Math.random();
                     var self = this;
                     var directory = urlJoin(this.currentWorkingPath, "/")
                     var name = this.currentNoteName;
                     var newContent = $(`#editorIframe`).get(0).contentWindow.editor.getValue();
-                    fetch("./updateNote", 
+                    $(`#editorIframe`).get(0).contentWindow.$(`#lastSavedLabel`).get(0).innerText = "Saving...";
+                    self.authPost("./updateNote", 
                     {
-                        method: "POST",
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            path: directory,
-                            name: name,
-                            content: newContent,
-                            socketIoId: this.socket.io.engine.id
-                        })
+                        path: directory,
+                        name: name,
+                        content: newContent,
+                        socketIoId: this.socket.io.engine.id
                     })
-                    .then(response => response.text())
                     .then(data => 
                     {
-                        console.log(data);
+                        var options = { hour: '2-digit',minute:'2-digit',second:'2-digit' };
+                        var today  = new Date();
+                        $(`#editorIframe`).get(0).contentWindow.$(`#lastSavedLabel`).get(0).innerText = `Last Saved ${today.toLocaleDateString("en-US", options)}`;
                     })
 
                     // there's problem fetching data from server
@@ -293,18 +412,12 @@
                     
                     var self = this;
                     var directory = urlJoin(this.currentPath, "/")
-                    fetch("./createNote", 
+                    self.authPost("./createNote", 
                     {
-                        method: "POST",
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(
-                        {
-                            path: directory,
-                            name: suitableName,
-                            socketIoId: this.socket.io.engine.id
-                        })
+                        path: directory,
+                        name: suitableName,
+                        socketIoId: this.socket.io.engine.id
                     })
-                    .then(response => response.text())
                     .then(data => 
                     { 
                         self.updateCurrentDirectoryFiles(); 
@@ -334,59 +447,55 @@
                     
                     var self = this;
                     var directory = urlJoin(this.currentPath, "/")
-                    fetch("./createFolder", 
+                    self.authPost("./createFolder", 
                     {
-                        method: "POST", headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(
-                        {
-                            path: directory,
-                            name: suitableName,
-                            socketIoId: this.socket.io.engine.id
-                        })
+                        path: directory,
+                        name: suitableName,
+                        socketIoId: this.socket.io.engine.id
                     })
-                    .then(response => response.text())
-                    .then(data => 
-                    { 
-                        self.updateCurrentDirectoryFiles(); 
-                    })
+                    .then(data => { self.updateCurrentDirectoryFiles(); })
                     // there's problem fetching data from server
-                    .catch(() => 
-                    {
-                        self.isSocketDisconnected = true;
-                    });
+                    .catch(() => { self.isSocketDisconnected = true; });
                 },
-                openNote: function(noteName)
+                openNote: function(noteName, skipLoading = false)
                 {
+                    this.updateToolbarMode();
                     this.modifiedNoteNames = this.modifiedNoteNames.filter(i => { return i != noteName });
-
-                    document.title = Math.random();
                     var path = urlJoin(urlJoin(this.currentPath), "/");
+                    // if (this.currentWorkingPath == path && noteName == this.currentNoteName) return;
+                    if (!skipLoading) $(`#editorIframe`).get(0).contentWindow.postMessage("displayLoadingPage", "*");
+                    document.title = noteName;
                     var queryURL = `./listDir?path=${path}`;
                     var editor = this.editor;
                     var self = this;
-                    this.currentNoteName = noteName;
-                    this.currentWorkingPath = path;
-                    fetch(queryURL)
-                    .then(response => response.text())
+                    
+                    self.authGet(queryURL)
                     .then(data => 
                     {
                         JSON.parse(data).forEach((object) => 
                         {
                             if (object.name == noteName && object.type == "note")
                             {
-                                self.suppressOnChangeEvent = true;
-                                $(`#editorIframe`).get(0).contentWindow.editor.setValue(object.content);
-                                if (self.suppressOnChangeEventTimeout != undefined) clearTimeout(self.suppressOnChangeEventTimeout);
-                                self.suppressOnChangeEventTimeout = setTimeout(() => { self.suppressOnChangeEvent = false; }, 300)
-
-                                // // highlight the note in frontend
-                                // $(`#filesSelectorPanel`).children().toArray().forEach(child => 
-                                // {
-                                //     if (child.dataset.name == noteName) child.classList.add("currentNote");
-                                //     else child.classList.remove("currentNote");
-                                // });
+                                var newContent = object.content;
+                                var oldContent = $(`#editorIframe`).get(0).contentWindow.editor.getValue();
+                                var oldCursor = editor.getCursor();
+                                if (oldContent != newContent) 
+                                {
+                                    self.preventSaving = true;
+                                    $(`#editorIframe`).get(0).contentWindow.editor.setValue(object.content);
+                                    //setTimeout(() => { editor.setCursor(oldCursor); }, 100);
+                                    setTimeout(() => 
+                                    {
+                                        self.preventSaving = false; 
+                                    }, 1000);
+                                }
+                                self.secondsLeftToSaveNote = -1;
+                                if (!skipLoading) $(`#editorIframe`).get(0).contentWindow.postMessage("hideLoadingPage", "*");
                             }
                         });
+                        this.currentNoteName = noteName;
+                        this.currentWorkingPath = path;
+                        self.isSocketDisconnected = false;
                     })
                     // there's problem fetching data from server
                     .catch(() => 
@@ -398,6 +507,7 @@
                 {
                     //this.currentNoteName = undefined;
                     this.currentPath = urlJoin(urlJoin(this.currentPath, folderName), "/");
+                    this.updateToolbarMode();
                 },
                 goUpFolder: function()
                 {
@@ -443,7 +553,6 @@
                 {
                     return this.currentPathFiles.filter(i => { return i.type == "folder"; });
                 },
-
                 // This is the text shown on the navbar, this will only get the last folder in the path, to avoid long path names taking up too many space.
                 currentPathShortName()
                 {
@@ -457,6 +566,7 @@
             {
                 currentPath(newPath, oldPath) 
                 {
+                    if (this.isAuthAvailable() == false) return;
                     this.updateCurrentDirectoryFiles();
                 },
                 currentPathFiles(newFilesList, oldFilesList)
@@ -468,24 +578,32 @@
             {
                 var d = 
                 {
+                    loginUsername:"",
+                    loginPassword:"",
+
                     currentPath:"", // this path is just the path in the nav view
                     currentWorkingPath:"", // working path is the full directory path of the current editing file
                     currentPathFiles:[],
                     currentNoteName:undefined,
                     editor: undefined,
                     socket: undefined,
-                    suppressOnChangeEvent: false,
-                    suppressOnChangeEventTimeout: undefined,
                     //inactivityCounter: 0
                     isSocketDisconnected: false,
                     modifiedNoteNames: [],
                     isDirectoryLoading: true,
                     currentSearchWords: "",
-                    
+                    currentTimeString: "",
+                    secondsLeftToSaveNote: -1,
+                    preventSaving: false,
+
+                    isLoggedIn: false,
                     contextMenuTarget: undefined,
                     window: window,
+                    pageHeight: window.innerHeight,
+                    pageWidth: window.innerWidth,
+                    currentPastedMedia: undefined,
 
-                    currentPastedMedia: undefined
+                    maxWidthToBeMobile: 900
                 }
                 return d;
             },
@@ -495,19 +613,47 @@
                 $(`#editorIframe`).get(0).onload = () => 
                 {
                     self.editor = $(`#editorIframe`).get(0).contentWindow.editor;
+                    var innerIframeDocument = $(`#editorIframe`).get(0).contentWindow;
+
+                    self.editor.onCloseNote = () => 
+                    {
+                        self.currentNoteName = undefined;
+                    };
+
+                    // change due to computer/human input
                     $(`#editorIframe`).get(0).contentWindow.editor.on("change", () => 
                     {
-                        if (!self.suppressOnChangeEvent)
-                        {
-                            self.saveNote();
-                        }
+                        console.log(2);
+                        var sizeBytes = new Blob([self.editor.getValue()]).size;
+                        if (sizeBytes < 1000) innerIframeDocument.$(`#sizeLabel`).get(0).innerText = `${sizeBytes} bytes`
+                        else if (sizeBytes < 1000000) innerIframeDocument.$(`#sizeLabel`).get(0).innerText = `${sizeBytes / 1000} kB`
+                        if (!self.preventSaving) self.secondsLeftToSaveNote = 2;
                     });
+
+                    // // change due to human input
+                    // $(`#editorIframe`).get(0).contentWindow.$(`textarea`).on("keyup", () => 
+                    // {
+                        
+                    // });
                 }
+
+                // // automatically save notes if there's > 3 seconds inactivity
+                // setInterval(() => 
+                // {
+                //     if (self.secondsLeftToSaveNote != -1) self.secondsLeftToSaveNote = Math.max(0, self.secondsLeftToSaveNote - 1);
+                //     if (self.secondsLeftToSaveNote == 0)
+                //     {
+                //         self.saveNote();
+                //         self.secondsLeftToSaveNote = -1;
+                //     }
+                // }, 1000);
             },
             mounted()
             {
                 this.socket = io();
                 var self = this;
+
+                if (self.isAuthAvailable()) self.isLoggedIn = true;
 
                 this.socket.on('connect', function() { self.isSocketDisconnected = false; });
                 this.socket.on('disconnect', function() { self.isSocketDisconnected = true; });
@@ -520,7 +666,7 @@
                     if (!self.modifiedNoteNames.includes(data.name)) { self.modifiedNoteNames.push(data.name); }
                     if (data.path == this.currentPath && data.name == this.currentNoteName && data.type == "note")
                     {
-                        self.openNote(this.currentNoteName);
+                        self.openNote(self.currentNoteName, true);
                     }
                 });
 
@@ -583,21 +729,28 @@
                     }
                 };
 
-                // this.editor = editormd("test-editor", 
-                // {
-                //     path : "editormd/lib/",
-                //     width  : "calc(100% - 2px)",
-                //     autoHeight : true,
-                //     theme: "dark",
-                //     previewTheme: "dark",
-                //     editorTheme: "pastel-on-dark",
-                //     // onchange: () =>
-                //     // { 
-                //     //     console.log(this);
-                //     //     this.saveNote(urlJoin(currentPath, "/"), currentNoteName, editor.getValue()); 
-                //     // }
-                //     // onchange: this.saveNote
-                // });   
+                window.addEventListener("resize", () => 
+                {
+                    self.updateToolbarMode();
+                });
+
+                setInterval(() => 
+                {
+                    var options = { hour: '2-digit',minute:'2-digit', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+                    var today  = new Date();
+                    self.currentTimeString = today.toLocaleDateString("en-US", options)
+                }, 1000);
+
+                var saveTimeInterval = 200;
+                setInterval(() => 
+                {
+                    if (self.secondsLeftToSaveNote != -1) self.secondsLeftToSaveNote = Math.max(0, self.secondsLeftToSaveNote - (saveTimeInterval / 1000));
+                    if (self.secondsLeftToSaveNote == 0) 
+                    {
+                        self.secondsLeftToSaveNote = -1;
+                        self.saveNote();
+                    }
+                }, 200);
 
                 this.currentPath = "/";                
             },
@@ -605,7 +758,7 @@
         </script>
 
         <style>
-        * { transition: 0; }
+        * { transition: 0; font-family: 'Roboto', sans-serif; }
         .currentNote { background:#333; }
         .fullSize { width: 100%; height:100%; }
         .h1Min { margin:0px; padding:0px; color:white; font-size:16px; font-weight:100; }
@@ -625,6 +778,11 @@
             background: url("loadingIcon.png");
             background-size: contain;
         }
+        @keyframes loadingIcon
+        {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         .pasteModelConfirmButton 
         { 
             background: rgb(34, 34, 34); border: 0px none; margin-right: 15px;padding: 4px 10px 4px 10px; 
@@ -634,133 +792,31 @@
         { 
             background: #444444; cursor: pointer;
         }
-        @keyframes loadingIcon
+        #mainGrid
         {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            display:grid; 
+            grid-template-columns: minmax(300px,0.25fr) 1fr; 
+            grid-template-rows:1fr; 
+            grid-template-areas: 'left right'; width:100%; height:100%;
         }
+        .leftPanelHidden { grid-template-columns: 0px 1fr !important; }
+        .rightPanelHidden { grid-template-columns: 1fr 0px !important; }
+
+        html {
+            overflow: hidden;
+            height: 100%;
+        }
+
+        body {
+            height: 100%;
+            overflow: auto;
+        }
+
+        #app { height:100%; }
+
         </style>
 
         <script type="text/javascript">
-
-        // var editor = editormd("test-editor", 
-        // {
-        //     path : "editormd/lib/",
-        //     width  : "calc(100% - 2px)",
-        //     autoHeight : true,
-        //     theme: "dark",
-        //     previewTheme: "dark",
-        //     editorTheme: "pastel-on-dark",
-        //     onchange: function () 
-        //     {
-        //         saveNote(urlJoin(currentPath, "/"), currentNoteName, editor.getValue());
-        //     }
-        // });    
-
-        // setTimeout(function () 
-        // {
-        //     editor.toolbarIcons[10].style.display = "none"
-        //     editor.toolbarIcons[11].style.display = "none"
-        //     editor.toolbarIcons[12].style.display = "none"
-        //     editor.toolbarIcons[13].style.display = "none"
-        //     editor.toolbarIcons[14].style.display = "none"
-        //     editor.settings.taskList = true;
-        //     // //editor.previewing();
-        // }, 1000);
-
-        // goToFolder("/");
-
-        // function saveNote(directory, name, newContent)
-        // {
-        //     fetch("./updateNote", 
-        //     {
-        //         method: "POST",
-        //         headers: { 'Content-Type': 'application/json' },
-        //         body: JSON.stringify({
-        //             path: directory,
-        //             name: name,
-        //             content: newContent
-        //         })
-        //     })
-        //     .then(response => response.text())
-        //     .then(data => 
-        //     {
-        //         console.log(data);
-        //     });
-        // }
-
-        // function updateFilesSelector()
-        // {
-        //     $(`#filesSelectorPanel`).empty();
-        //     currentPathFiles.forEach(object => 
-        //     {
-        //         if (object.type == "note")
-        //         {
-        //             $(`#filesSelectorPanel`).append(
-        //             `
-        //                 <div data-name="${object.name}" onclick="openNote('${object.name}')" class="verticallyCenter noteSelector">
-        //                     <h1 class="h1Min">${object.name}</h1>
-        //                 </div>
-        //             `);
-        //         }
-        //         else if (object.type == "folder")
-        //         {
-        //             $(`#filesSelectorPanel`).append(
-        //             `
-        //                 <div data-name="${object.name}" onclick="goToFolder('${object.name}')" class="verticallyCenter noteSelector">
-        //                     <div style="position:relative; width:100%;">
-        //                         <h1 class="h1Min">${object.name}</h1>
-        //                         <span style="color:white; position:absolute; right:0px; top:0px;" class="material-icons md-dark">chevron_right</span>
-        //                     </div>
-        //                 </div>
-        //             `);
-        //         }
-        //     });
-        // }
-
-        // function openNote(noteName)
-        // {
-        //     var path = urlJoin(urlJoin(currentPath), "/");
-        //     var queryURL = `./listDir?path=${path}`;
-            
-        //     fetch(queryURL)
-        //     .then(response => response.text())
-        //     .then(data => 
-        //     {
-        //         console.log(data);
-        //         JSON.parse(data).forEach((object) => 
-        //         {
-        //             if (object.name == noteName && object.type == "note")
-        //             {
-        //                 editor.setValue(object.content)
-        //                 currentNoteName = noteName;
-
-        //                 // highlight the note in frontend
-        //                 $(`#filesSelectorPanel`).children().toArray().forEach(child => 
-        //                 {
-        //                     if (child.dataset.name == noteName) child.classList.add("currentNote");
-        //                     else child.classList.remove("currentNote");
-        //                 });
-        //             }
-        //         });
-        //     });
-        // }
-
-        // function goToFolder(relativePath)
-        // {
-        //     var path = urlJoin(urlJoin(currentPath, relativePath), "/");
-        //     currentPath = path;
-        //     var queryURL = `./listDir?path=${path}`;
-            
-        //     fetch(queryURL)
-        //     .then(response => response.text())
-        //     .then(data => 
-        //     {
-        //         console.log(data);
-        //         currentPathFiles = JSON.parse(data);
-        //         setTimeout(updateFilesSelector, 100);
-        //     });
-        // }
 
         </script>
     </body>

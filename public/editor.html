@@ -1,12 +1,30 @@
-<html>
+<!DOCTYPE html>
+<html style="height:100%;">
     <body style="width:100%; height:100%;margin:0px; overflow: hidden;">
         <script src="./urlJoin.js"></script>
         <script src="./jquery.min.js"></script>
         <script src="editormd/editormd.js"></script>
         <script src="./md_english.js"></script>
         <link rel="stylesheet" href="editormd/css/editormd.css" />
-        <div id="test-editor" style="width:100%; height:100%;">
-            <textarea></textarea>
+        <div id="mainGrid" style="display:grid;  width:100%; height:100%; grid-template-columns: 1fr; grid-template-rows: 1fr 30px; grid-template-areas: 'top' 'bottom';">
+            <div id="test-editor" style="grid-area: top;">
+                <textarea></textarea>
+            </div>
+            <div style="grid-area:bottom; border-left:1px solid #111111; width:100%; height:100%;  background:rgb(26, 26, 23); position: relative;">
+                <div style="height:100%; display:flex; align-items:center; position:absolute; right:0px; padding-left:15px; padding-right:15px; font-size: 14px;">
+                    <div id="sizeLabel" style="color:white;">...</div>
+                </div>
+                <div style="height:100%; display:flex; align-items:center; position:absolute; left:0px; padding-left:15px; padding-right:15px; font-size: 14px;">
+                    <div id="lastSavedLabel" style="color:white;">...</div>
+                </div>
+            </div>
+        </div>
+        <div id="loadingPage" style="position: fixed; left:0px; bottom:0px; right:0px; top:0px;" class="maxCenter">
+            <div>
+                <center><div style="color:white;" class="loadingIcon"></div></center>
+                <br>
+                <center><h1 style="font-size:15px; font-weight: 100; color:white;">Loading</h1></center>
+            </div>
         </div>
         <script>
         var editor = editormd("test-editor", 
@@ -17,31 +35,32 @@
             theme: "dark",
             previewTheme: "dark",
             editorTheme: "pastel-on-dark",
-            // onchange: () =>
-            // { 
-            //     console.log(this);
-            //     this.saveNote(urlJoin(currentPath, "/"), currentNoteName, editor.getValue()); 
-            // }
-            // onchange: this.saveNote
         });   
+
         setTimeout(function () 
         {         
             editor.settings.taskList = true;
-            //var iconsIDToHide = [2,3,4,10,11,12,13,14];
-            var iconsIDToKeep = [0,1,5,15,16,17,18,19,20,26,30,31,32];
-            
-            for (let i = 0; i < editor.toolbarIcons.length; i++) 
-            {
-                if (iconsIDToKeep.includes(i)) continue;
-                editor.toolbarIcons[i].style.display = "none";                
-                editor.toolbarIcons[i].parentNode.style.paddingLeft = "0px";
-                editor.toolbarIcons[i].parentNode.style.paddingRight = "0px";
-            }
+            editor.settings.htmlDecode = true;
 
-            $(".divider")[2].style.display = "none";
+            // Initialize the icons shown in the toolbar
+            editor.settings.toolbarIcons = "defaultFull";
+            editor.setToolbar();
+
+            // //var iconsIDToHide = [2,3,4,10,11,12,13,14];
+            // var iconsIDToKeep = [0,1,5,15,16,17,18,19,20,26,30,31];
+            
+            // for (let i = 0; i < editor.toolbarIcons.length; i++) 
+            // {
+            //     if (iconsIDToKeep.includes(i)) continue;
+            //     editor.toolbarIcons[i].style.display = "none";                
+            //     editor.toolbarIcons[i].parentNode.style.paddingLeft = "0px";
+            //     editor.toolbarIcons[i].parentNode.style.paddingRight = "0px";
+            // }
+
+            // $(".divider")[2].style.display = "none";
 
             // //editor.previewing();
-        }, 1000);
+        }, 500);
         
         // window.addEventListener('paste', ... or
         document.onpaste = function(event)
@@ -68,8 +87,45 @@
             }
         }
 
+        // Listen for postMessage event coming from the editor iframe when images are pasted.
+        window.onmessage = function(e) 
+        {
+            if (e.data.name == 'hideCloseNoteButton') 
+            {
+                
+            }
+            else if (e.data.name == 'showCloseNoteButton') 
+            {
+                
+            }
+            else if (e.data == 'displayLoadingPage') 
+            {
+                document.getElementById("mainGrid").style.opacity = 0;
+                document.getElementById("loadingPage").style.opacity = 1;
+            }
+            else if (e.data == 'hideLoadingPage') 
+            {
+                document.getElementById("mainGrid").style.opacity = 1;
+                document.getElementById("loadingPage").style.opacity = 0;
+            }
+        };
+
         </script>
         <style>
+        .maxCenter { display:flex; width:100%; height:100%; justify-content: center; align-items: center; }
+        .loadingIcon 
+        {
+            animation: loadingIcon 2s infinite linear;
+            height: 32px;
+            width: 32px;
+            background: url("loadingIcon.png");
+            background-size: contain;
+        }
+        @keyframes loadingIcon
+        {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         #test-editor > .CodeMirror { border-right: 1px solid #222222 !important; }
         .CodeMirror-scroll { overflow-x: hidden !important; }
         .task-list-item-checkbox.notChecked { accent-color: #9b59b6; color:transparent; }
@@ -80,7 +136,7 @@
             cursor: pointer; -webkit-appearance: none; appearance: none; margin: 0; 
             border: 1px solid currentColor; place-content: center;
             font: inherit;
-            transform: translateY(1px);
+            transform: translateY(1.5px);
             height: 15px; width: 15px; display: inline-block;
             margin-right: 5px !important;
             border-radius: 15px; border-color:red;
@@ -95,7 +151,7 @@
             height: 100%;
             display: inline-block;
             background-color: red;
-            transform: scale(0.86) translateX(0px) translateY(0px);
+            transform: scale(0.86) translateX(0px) translateY(0.5px);
             clip-path: polygon(20% 9%, 48% 34%, 75% 6%, 89% 21%, 63% 49%, 90% 76%, 77% 90%, 48% 65%, 22% 91%, 7% 76%, 32% 49%, 6% 23%);
         }
         .customCheckbox:checked::before

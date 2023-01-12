@@ -49,9 +49,9 @@
     /**
      * editormd
      * 
-     * @param   {String} id           编辑器的ID
-     * @param   {Object} options      配置选项 Key/Value
-     * @returns {Object} editormd     返回editormd对象
+     * @param   {String} id
+     * @param   {Object} options
+     * @returns {Object} editormd
      */
     
     var editormd         = function (id, options) {
@@ -71,7 +71,7 @@
             "list-ul", "list-ol", "hr", "|",
             "link", "reference-link", "image", "code", "preformatted-text", "code-block", "table", "datetime", "emoji", "html-entities", "pagebreak", "|",
             "goto-line", "watch", "preview", "fullscreen", "clear", "search", "|",
-            "help", "info"
+            "help", "info", "closeNote"
         ],
         simple : [
             "undo", "redo", "|", 
@@ -85,6 +85,14 @@
             "undo", "redo", "|",
             "watch", "preview", "|",
             "help", "info"
+        ],
+        defaultFull : [
+            "undo", "redo", "|",
+            "goto-line", "watch", "preview", "|"
+        ],
+        defaultMobile : [
+            "closeNote", "|", "undo", "redo", "|", "code",
+            "goto-line", "watch", "preview", "search", "|",
         ]
     };
     
@@ -222,7 +230,8 @@
             fullscreen       : "fa-arrows-alt",
             clear            : "fa-eraser",
             help             : "fa-question-circle",
-            info             : "fa-info-circle"
+            info             : "fa-info-circle",
+            closeNote        : "fa-arrow-left"
         },        
         toolbarIconTexts     : {},
         
@@ -268,7 +277,8 @@
                 clear            : "清空",
                 search           : "搜索",
                 help             : "使用帮助",
-                info             : "关于" + editormd.title
+                info             : "关于" + editormd.title,
+                closeNote        : "close"
             },
             buttons : {
                 enter  : "确定",
@@ -879,13 +889,6 @@
             return this;
         },
         
-        /**
-         * 扩展当前实例对象，可同时设置多个或者只设置一个
-         * Extend editormd instance object, can mutil setting.
-         * 
-         * @returns {editormd}                  this(editormd instance object.)
-         */
-        
         extend : function() {
             if (typeof arguments[1] !== "undefined")
             {
@@ -905,15 +908,6 @@
             return this;
         },
         
-        /**
-         * 设置或扩展当前实例对象，单个设置
-         * Extend editormd instance object, one by one
-         * 
-         * @param   {String|Object}   key       option key
-         * @param   {String|Object}   value     option value
-         * @returns {editormd}                  this(editormd instance object.)
-         */
-        
         set : function (key, value) {
             
             if (typeof value !== "undefined" && typeof value === "function")
@@ -925,15 +919,6 @@
 
             return this;
         },
-        
-        /**
-         * 重新配置
-         * Resetting editor options
-         * 
-         * @param   {String|Object}   key       option key
-         * @param   {String|Object}   value     option value
-         * @returns {editormd}                  this(editormd instance object.)
-         */
         
         config : function(key, value) {
             var settings = this.settings;
@@ -954,15 +939,6 @@
             return this;
         },
         
-        /**
-         * 注册事件处理方法
-         * Bind editor event handle
-         * 
-         * @param   {String}     eventType      event type
-         * @param   {Function}   callback       回调函数
-         * @returns {editormd}                  this(editormd instance object.)
-         */
-        
         on : function(eventType, callback) {
             var settings = this.settings;
             
@@ -974,14 +950,6 @@
             return this;
         },
         
-        /**
-         * 解除事件处理方法
-         * Unbind editor event handle
-         * 
-         * @param   {String}   eventType          event type
-         * @returns {editormd}                    this(editormd instance object.)
-         */
-        
         off : function(eventType) {
             var settings = this.settings;
             
@@ -992,14 +960,6 @@
             
             return this;
         },
-        
-        /**
-         * 显示工具栏
-         * Display toolbar
-         * 
-         * @param   {Function} [callback=function(){}] 回调函数
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         showToolbar : function(callback) {
             var settings = this.settings;
@@ -1023,14 +983,6 @@
             return this;
         },
         
-        /**
-         * 隐藏工具栏
-         * Hide toolbar
-         * 
-         * @param   {Function} [callback=function(){}] 回调函数
-         * @returns {editormd}                         this(editormd instance object.)
-         */
-        
         hideToolbar : function(callback) { 
             var settings = this.settings;
             
@@ -1042,13 +994,6 @@
 
             return this;
         },
-        
-        /**
-         * 页面滚动时工具栏的固定定位
-         * Set toolbar in window scroll auto fixed position
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         setToolbarAutoFixed : function(fixed) {
             
@@ -1096,13 +1041,6 @@
 
             return this;
         },
-        
-        /**
-         * 配置和初始化工具栏
-         * Set toolbar and Initialization
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         setToolbar : function() {
             var settings    = this.settings;  
@@ -1198,16 +1136,7 @@
 
             return this;
         },
-        
-        /**
-         * 工具栏图标事件处理对象序列
-         * Get toolbar icons event handlers
-         * 
-         * @param   {Object}   cm    CodeMirror的实例对象
-         * @param   {String}   name  要获取的事件处理器名称
-         * @returns {Object}         返回处理对象序列
-         */
-            
+         
         dialogLockScreen : function() {
             $.proxy(editormd.dialogLockScreen, this)();
             
@@ -1225,13 +1154,6 @@
             
             return (name && typeof toolbarIconHandlers[name] !== "undefined") ? toolbarHandlers[name] : toolbarHandlers;
         },
-        
-        /**
-         * 工具栏图标事件处理器
-         * Bind toolbar icons event handle
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         setToolbarHandler : function() {
             var _this               = this;
@@ -1285,24 +1207,9 @@
             return this;
         },
         
-        /**
-         * 动态创建对话框
-         * Creating custom dialogs
-         * 
-         * @param   {Object} options  配置项键值对 Key/Value
-         * @returns {dialog}          返回创建的dialog的jQuery实例对象
-         */
-        
         createDialog : function(options) {            
             return $.proxy(editormd.createDialog, this)(options);
         },
-        
-        /**
-         * 创建关于Editor.md的对话框
-         * Create about Editor.md dialog
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         createInfoDialog : function() {
             var _this        = this;
@@ -1336,13 +1243,6 @@
             return this;
         },
         
-        /**
-         * 关于Editor.md对话居中定位
-         * Editor.md dialog position handle
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
-        
         infoDialogPosition : function() {
             var infoDialog = this.infoDialog;
             
@@ -1359,13 +1259,6 @@
             
             return this;
         },
-        
-        /**
-         * 显示关于Editor.md
-         * Display about Editor.md dialog
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         showInfoDialog : function() {
 
@@ -1395,13 +1288,6 @@
             return this;
         },
         
-        /**
-         * 隐藏关于Editor.md
-         * Hide about Editor.md dialog
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
-        
         hideInfoDialog : function() {            
             $("html,body").css("overflow-x", "");
             this.infoDialog.hide();
@@ -1411,27 +1297,12 @@
             return this;
         },
         
-        /**
-         * 锁屏
-         * lock screen
-         * 
-         * @param   {Boolean}    lock    Boolean 布尔值，是否锁屏
-         * @returns {editormd}           返回editormd的实例对象
-         */
-        
         lockScreen : function(lock) {
             editormd.lockScreen(lock);
             this.resize();
 
             return this;
         },
-        
-        /**
-         * 编辑器界面重建，用于动态语言包或模块加载等
-         * Recreate editor
-         * 
-         * @returns {editormd}  返回editormd的实例对象
-         */
         
         recreate : function() {
             var _this            = this;
@@ -1460,13 +1331,6 @@
             return this;
         },
         
-        /**
-         * 高亮预览HTML的pre代码部分
-         * highlight of preview codes
-         * 
-         * @returns {editormd}             返回editormd的实例对象
-         */
-        
         previewCodeHighlight : function() {    
             var settings         = this.settings;
             var previewContainer = this.previewContainer;
@@ -1484,13 +1348,6 @@
             return this;
         },
         
-        /**
-         * 解析TeX(KaTeX)科学公式
-         * TeX(KaTeX) Renderer
-         * 
-         * @returns {editormd}             返回editormd的实例对象
-         */
-        
         katexRender : function() {
             
             if (timer === null)
@@ -1507,13 +1364,6 @@
 
             return this;
         },
-        
-        /**
-         * 解析和渲染流程图及时序图
-         * FlowChart and SequenceDiagram Renderer
-         * 
-         * @returns {editormd}             返回editormd的实例对象
-         */
         
         flowChartAndSequenceDiagramRender : function() {
             var $this            = this;
@@ -1567,14 +1417,6 @@
 
             return this;
         },
-        
-        /**
-         * 注册键盘快捷键处理
-         * Register CodeMirror keyMaps (keyboard shortcuts).
-         * 
-         * @param   {Object}    keyMap      KeyMap key/value {"(Ctrl/Shift/Alt)-Key" : function(){}}
-         * @returns {editormd}              return this
-         */
         
         registerKeyMaps : function(keyMap) {
             
@@ -3180,6 +3022,11 @@
 
         info : function() {
             this.showInfoDialog();
+        },
+
+        closeNote: function()
+        {
+            if (this.onCloseNote) this.onCloseNote();
         }
     };
     
