@@ -24,6 +24,7 @@ class FileNotExistsError extends Error
 }
 
 const { logGreen, logRed, log, logBlue, getLog } = require(`./extendedLog.js`);
+const fs = require('fs-extra');
 const MongoClient = require(`mongodb`);
 var dbClient = undefined;
 var dbInstance = undefined;
@@ -46,6 +47,12 @@ module.exports = async (connectionUrlString) =>
     dbNames["notesCollection"].collectionInstance = await dbInstance.collection("Notes");
     logGreen("Connected to database.");
     module.exports.dbInstance = dbInstance;
+    
+    logGreen("Will backup every 12 hours...");
+    setInterval(() => 
+    {
+        module.exports.backup();
+    }, 60000 * 60 * 12);
 }
 
 module.exports.isNoteExist = async (directory, noteName) => 
@@ -297,4 +304,37 @@ module.exports.renameFolder = async (pathDirectory, oldName, newName) =>
 module.exports.queryNotesCollection = async (options, method="find") =>
 {
     return await dbNames["notesCollection"].collectionInstance[method](options).toArray();
+}
+
+module.exports.backup = async () => 
+{
+    return fs.pathExists("./backup").then(async isExist => 
+    {
+        if (!isExist) 
+        {
+            log("./backup is not found. Creating folder...");    
+            await fs.mkdir("./backup");
+        }
+
+        var allCollectionNames = (await dbInstance.listCollections().toArray()).map(x => x.name);
+        var today = new Date();
+        var currentDate = `${today.getDate()}-${today.getMonth()+1}-${today.getFullYear()}`;
+        
+        // if backup exists, skip
+        if (await fs.pathExists(`./backup/${currentDate}`)) 
+        { 
+            logGreen(`Backup for ${currentDate} already exists... skipping backup.`);
+            return; 
+        }
+        else await fs.mkdir(`./backup/${currentDate}`);
+
+        for (var i = 0; i < allCollectionNames.length; i++)
+        {
+            var jsonToSave = await dbInstance.collection(allCollectionNames[i]).find({}).toArray();
+            await fs.writeJSON(`./backup/${currentDate}/${allCollectionNames[i]}.json`, jsonToSave);
+        }
+
+        logGreen(`Backup for ${currentDate} created!`);
+        
+    });
 }
