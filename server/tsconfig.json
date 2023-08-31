@@ -1,0 +1,16 @@
+{
+  "compilerOptions": 
+  {
+    "outDir":"./server_build",
+    "experimentalDecorators":true,
+    "emitDecoratorMetadata": true,
+    "allowJs": true,
+    "target": "ES5"
+  },
+  "include": [
+    "server_source/**/*.ts", "server_source/extendedLog.ts", "server_source/endpoints.ts", "server_source/auth.ts",
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

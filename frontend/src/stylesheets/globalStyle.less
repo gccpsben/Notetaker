@@ -1,0 +1,16 @@
+@import "snippets/less/baseStyle.less";
+@import "@/stylesheets/mainTheme.less";
+
+* { box-sizing: border-box; }
+.text {  color:@foreground; font-family:@font;  }
+span:not(.icon) { .tight; .text; }
+.clickable { cursor:pointer; user-select: none; }
+.fullSizeAbs { position:absolute; top:0; left:0; right:0; bottom:0; }
+.noBorder { border:0; }
+.loadingSpinner { .size(50px, 50px); animation: loaderSpin 1s infinite linear; }
+
+@keyframes loaderSpin 
+{
+    0% { transform:rotate(0deg); }    
+    100% { transform:rotate(360deg); }
+}
