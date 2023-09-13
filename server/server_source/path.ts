@@ -34,7 +34,7 @@ class InvalidFileNameError extends Error
 {
     constructor(filename:string, message:string) 
     {
-        var m = `'${filename}' is not a valid name for files. Reason: ${message}`;
+        let m = `'${filename}' is not a valid name for files. Reason: ${message}`;
         super();
         this.name = "InvalidFileNameError";
         this.message = m;
@@ -45,7 +45,7 @@ class InvalidPathError extends Error
 {
     constructor(path:string, message:string) 
     {
-        var m = `'${path}' is not a valid path. Reason: ${message}`;
+        let m = `'${path}' is not a valid path. Reason: ${message}`;
         super();
         this.name = "InvalidPathError";
         this.message = m;
@@ -56,7 +56,7 @@ class UnexpectedPathTypeError extends Error
 {
     constructor(path:string, expectedType: ObjectType)
     {
-        var m = `'${path}' is not a ${expectedType} path. Please use a ${expectedType} path.`;
+        let m = `'${path}' is not a ${expectedType} path. Please use a ${expectedType} path.`;
         super();
         this.name = "UnexpectedPathTypeError";
         this.message = m;

@@ -17,6 +17,7 @@
     "jsdom": "^22.1.0",
     "markdown-it-container": "^3.0.0",
     "markdown-it-named-code-blocks": "^0.2.0",
+    "math-expression-evaluator": "^2.0.3",
     "md-editor-v3": "^4.4.0",
     "pinia": "^2.0.36",
     "sanitize-html": "^2.11.0",
@@ -24,7 +25,8 @@
     "snippets": "git+https://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:x-oauth-basic@github.com/gccpsben/snippets.git",
     "socket.io-client": "^4.7.2",
     "vue": "^3.3.2",
-    "vue-router": "^4.2.0"
+    "vue-router": "^4.2.0",
+    "vue-temp-var": "^0.0.2"
   },
   "devDependencies": {
     "@tsconfig/node18": "^2.0.1",

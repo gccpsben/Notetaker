@@ -5,7 +5,7 @@ import * as auth from './auth';
 import * as socketIO from 'socket.io';
 import { mongoose } from '@typegoose/typegoose';
 import { FolderClass } from './folder';
-import { ObjectType } from './path';
+import { ObjectType, ensurePath } from './path';
 import { FileNotExistsError, NoteClass, NoteModel } from './note';
 
 let expressInstance = undefined;
@@ -295,68 +295,82 @@ export async function init(app:Express.Express, io:socketIO.Server)
         });
     });
 
-    setEndpoint("/api/renameFolder", "POST", async (req, res, next) => 
+    setEndpoint("/api/renameFolder", "POST", async (req, res, next) =>
     {
-        var socketIOClientID = req.body.socketIoId;
-        var folderName = req.body.oldName;
-        var newName = req.body.newName;
-
-        if (!await checkReqSession(req,res)) { return; }
-
-        var queryPath = decodeURIComponent(req.body.path);
-
-        if (folderName == undefined)
+        try
         {
-            res.status(422);
-            res.json({message: "folderName cannot be undefined."});
-            return;
+            let oldFullPath = req.body.fullPath;
+            let newName = req.body.newName;
+            
+            if (!oldFullPath || !newName) throw new Error("Argument error");
+            ensurePath(oldFullPath, ObjectType.Folder);
+            
         }
-        else if (newName == undefined)
-        {
-            res.status(422);
-            res.json({message: "newName cannot be undefined."});
-            return;
-        }
-        else if (queryPath == undefined)
-        {
-            res.status(422);
-            res.json({message: "queryPath cannot be undefined."});
-            return;
-        }
+        catch(e) { res.status(400).json(e); }       
+    });
 
-        databaseOperations.renameFolder(queryPath, folderName, newName)
-        .then((data) => 
-        {
-            res.status(200);
-            res.json(data);
+    // setEndpoint("/api/renameFolder", "POST", async (req, res, next) => 
+    // {
+    //     var socketIOClientID = req.body.socketIoId;
+    //     var folderName = req.body.oldName;
+    //     var newName = req.body.newName;
 
-            socketIoInstance.emit("directoryChanged", 
-            {
-                "path": queryPath,
-                "name": folderName,
-                "type": "folder",
-                "socketIdSource": socketIOClientID
-            });
+    //     if (!await checkReqSession(req,res)) { return; }
 
-            socketIoInstance.emit("folderRenamed", 
-            {
-                "path": queryPath,
-                "oldName": folderName,
-                "newName": newName,
-                "type": "folder",
-                "socketIdSource": socketIOClientID
-            });
+    //     var queryPath = decodeURIComponent(req.body.path);
 
-            return;
-        })
-        .catch(error => 
-        {
-            res.status(400);
-            log(error);
-            res.json(error);
-            return;
-        });
-    })
+    //     if (folderName == undefined)
+    //     {
+    //         res.status(422);
+    //         res.json({message: "folderName cannot be undefined."});
+    //         return;
+    //     }
+    //     else if (newName == undefined)
+    //     {
+    //         res.status(422);
+    //         res.json({message: "newName cannot be undefined."});
+    //         return;
+    //     }
+    //     else if (queryPath == undefined)
+    //     {
+    //         res.status(422);
+    //         res.json({message: "queryPath cannot be undefined."});
+    //         return;
+    //     }
+
+    //     databaseOperations.renameFolder(queryPath, folderName, newName)
+    //     .then((data) => 
+    //     {
+    //         res.status(200);
+    //         res.json(data);
+
+    //         socketIoInstance.emit("directoryChanged", 
+    //         {
+    //             "path": queryPath,
+    //             "name": folderName,
+    //             "type": "folder",
+    //             "socketIdSource": socketIOClientID
+    //         });
+
+    //         socketIoInstance.emit("folderRenamed", 
+    //         {
+    //             "path": queryPath,
+    //             "oldName": folderName,
+    //             "newName": newName,
+    //             "type": "folder",
+    //             "socketIdSource": socketIOClientID
+    //         });
+
+    //         return;
+    //     })
+    //     .catch(error => 
+    //     {
+    //         res.status(400);
+    //         log(error);
+    //         res.json(error);
+    //         return;
+    //     });
+    // })
 
     setEndpoint("/api/register", "POST", async (req: Express.Request, res: Express.Response, next) => 
     {

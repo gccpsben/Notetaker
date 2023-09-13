@@ -18,12 +18,12 @@ export default defineConfig(
         {
             '/api': 
 			{
-				target: 'http://192.168.8.130:55558',
+				target: 'https://192.168.8.130:55558',
 				changeOrigin: true,
 				secure: false
 			},
 			'/socket.io': {
-				target: 'http://192.168.8.130:55558',
+				target: 'https://192.168.8.130:55558',
 				changeOrigin: true,
 				ws: true,
 				secure: false

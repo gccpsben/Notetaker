@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { useNavigator } from '@/composables/useNavigator';
-import { useMainStore } from '@/stores/mainStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { MdEditor } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
-import { computed, nextTick, ref, VueElement, type Ref, reactive } from 'vue';
-import { type APIOpenNoteResponseType, type FileObjectType } from '@/types';
+import { nextTick, ref, type Ref, reactive } from 'vue';
+import { type FileObjectType } from '@/types';
 import sanitizeHtml from 'sanitize-html';
-import jsdom from 'jsdom';
+import mathExp from 'math-expression-evaluator';
 </script>
 
 <script lang="ts">
@@ -17,8 +16,13 @@ export class Notice
     // We need to use ref so that the Vue engine will update when we change content and opacity
     public content = ref("");
     public noticeOpacity = ref(1) as Ref<number>;
+    public noticeType = 'info' as 'info'|'error'|'warning';
 
-    public constructor(content:string) { this.content.value = content; }
+    public constructor(content:string, type:'info'|'error'|'warning'='info') 
+    { 
+        this.content.value = content; 
+        this.noticeType = type;
+    }
     public fade(timeoutMs: number) 
     {
         let self = this;
@@ -29,6 +33,67 @@ export class Notice
             if (this.noticeOpacity.value == 0) clearInterval(timer);
         }, 100);
     }
+}
+
+export class QuickResult
+{
+    public type = 'text' as 'text'|'color';
+    public arg: any;
+    public constructor(type:'text'|'color'='text', arg?:any)
+    {
+        this.type = type;
+        if (arg) this.arg = arg;
+    }
+}
+
+/**
+ * Represent a selectable item in the UI
+ */
+export abstract class Selectable 
+{
+    public abstract getType():string;    
+}
+
+export class FolderItem extends Selectable
+{
+    public fullPath = "";
+
+    constructor(fullpath:string)
+    {
+        super();
+        this.fullPath = fullpath;
+    }
+
+    public getType(): string { return "Folder" };
+}
+
+/**
+ * Represent a folder (in which the navigator is showing).
+ */
+export class FolderNavigatorItem extends Selectable
+{
+    public fullPath = "";
+
+    constructor(fullpath:string)
+    {
+        super();
+        this.fullPath = fullpath;
+    }
+
+    public getType(): string { return "FolderNavigator" };
+}
+
+export class FileItem extends Selectable
+{
+    public fullPath = "";
+
+    constructor(fullpath:string)
+    {
+        super();
+        this.fullPath = fullpath;
+    }
+
+    public getType(): string { return "File" };
 }
 
 export class OpenedTab
@@ -45,7 +110,6 @@ export class OpenedTab
     public constructor(filePath:string)
     {
         if (filePath.endsWith("/")) throw new Error("File path must not end with '/'.");
-        let self = this;
         this.fullFilePath = filePath;
         this.fileName = this.fullFilePath?.split("/").slice(-1)[0] ?? "";
     }
@@ -57,7 +121,6 @@ export class OpenedTab
         .then(data => 
         {
             this.content = data.content;
-            // self.noteDoc = data as APIOpenNoteResponseType; 
             this.isLoading = false;
             nextTick(() => { if (onloadCallback) onloadCallback(this); });
         });
@@ -76,6 +139,27 @@ export default
     {
         this.networkStore.connectSocket();
         this.openNote("/root/Crypto/Note Crypto");
+
+        document.addEventListener("mousemove", (e) => 
+        {
+            this.mouseLocation.x = e.clientX;
+            this.mouseLocation.y = e.clientY;
+        });
+
+        document.addEventListener("selectionchange", (e) => 
+        {
+            let selection = window.getSelection();
+            if (selection == undefined) return;
+            let type = selection.type; // expect 'Range'
+
+            if (type === 'Range') this.currentHighlightedText = selection.toString();
+            else if (type === "Caret")
+            {
+                let anchorNode = selection.anchorNode;
+                this.currentHighlightedText = (anchorNode as HTMLElement).innerText || anchorNode?.nodeValue || '';
+            }
+            else this.currentHighlightedText = '';
+        });
     },
     data()
     {
@@ -85,12 +169,41 @@ export default
             navigator: useNavigator(),
             openedTabs: [] as OpenedTab[],
             notices: [] as Notice[],
-            currentEditorContent: ""
+            currentHighlightedText: "",
+            mexp: new mathExp(),
+            selectedItem: undefined as undefined|Selectable,
+            mouseLocation: { x:0, y:0 },
+            contextMenuLocation: { x:0, y:0 }
         };
         return data;
     },
     methods:
     {
+        /**
+         * Rename an object (either a folder or a file).
+         * This method will prompt user to enter a new name.
+         * @param filePath 
+         */
+        renameObject(filePath:string)
+        {
+            
+        },
+        updateContextMenuLocation() 
+        { 
+            this.contextMenuLocation.x = this.mouseLocation.x;
+            this.contextMenuLocation.y = this.mouseLocation.y;
+        },
+        onDirectoryClicked(fullPath:string)
+        {
+            this.updateContextMenuLocation();
+            alert(fullPath);
+        },
+        onDirectoryFileClicked(pathItem: FileObjectType)
+        {
+            this.updateContextMenuLocation();
+            if (pathItem.type == 'Folder') this.selectedItem = new FolderItem(this.navigator.currentPath + pathItem.objectName + '/'); // A folder
+            else this.selectedItem = new FileItem(this.navigator.currentPath + pathItem.objectName); // A file
+        },
         openNote(fullPath:string) 
         { 
             // see if the file is already opened
@@ -141,15 +254,20 @@ export default
 
             let notice = this.pushNotice(`Saving ${fileNameOld}...`);
 
-            this.activeTab.saveContent().then(() => 
+            this.activeTab.saveContent().then((data) => 
             {
+                console.log(data);
                 notice.content.value = `Saved ${fileNameOld}!`;
                 notice.fade(5000);
                 setTimeout(() => { this.cleanupNotice() }, 10000); // Cleanup
-            }).catch(() => 
+            })
+            .catch(async (response: Response) => 
             {
-                notice.content.value = `Error saving ${fileNameOld}`;
-                notice.fade(5000);
+                let body = await response.json();
+                notice.noticeType = 'error';
+                if (body) notice.content.value = `Error saving ${fileNameOld}: ${body.name}`;
+                else notice.content.value = `Error saving ${fileNameOld}: ${response.status}(${response.statusText})`;
+                notice.fade(15000);
                 setTimeout(() => { this.cleanupNotice() }, 10000); // Cleanup
             });
         },
@@ -228,27 +346,7 @@ export default
             this.openedTabs = this.openedTabs.filter(tab => tab.fullFilePath != fullPath);
         },
 
-        onPreviewChanges()
-        {
-            // When the preview changes, we need to add spoiler events to the elements
-            // we should not inject the onclick events via plugin, before the HTML will get sanitized and the onclick event will be cleared.
-            // that's why we need to inject the events AFTER the html is sanitized.
-
-            // let previewContainer = document.querySelector("article#md-editor-v3-preview");
-            // if (previewContainer == undefined) return;
-            // let allSpoilersContainer = previewContainer.querySelectorAll(".container_spoiler");
-            // allSpoilersContainer.forEach(spoiler => 
-            // {
-            //     console.log(`Added to`);
-            //     console.log(spoiler);
-            //     spoiler.innerHTML += `123123`;
-            //     (spoiler as HTMLElement).addEventListener('mousedown', () => 
-            //     {
-            //         console.log("clicked");
-            //         alert("123123");
-            //     });
-            // });
-        }
+        closeContextMenu() { this.selectedItem = undefined; },
     },
     computed:
     {
@@ -258,28 +356,68 @@ export default
             let result = this.openedTabs.filter(x => x.hasUnsavedChange).map(x => x.fullFilePath);
             console.log(result);
             return result;
-        }
+        },
+        quickResult(): QuickResult
+        {
+            // ft to meters
+            if (/^[0-9.]{1,}[ ]{0,1}(ft)|(feets)|(feet)/i.test(this.currentHighlightedText))
+            {
+                let ft = parseFloat(this.currentHighlightedText.split(' ')[0]);
+                let r = new QuickResult('text');
+                r.arg = `${ft} feet = ${(ft * 0.3048).toFixed(2)} meter(s)`;
+                return r;
+            }
+            else if (/^#[0-9a-f]{6}$/i.test(this.currentHighlightedText))
+            {
+                let hexToDec = (str:string) => { return parseInt(str, 16); }
+                let hex = this.currentHighlightedText.replace("#",''); // 123456
+                let rgb = `${hexToDec(hex[0]+hex[1])}, ${hexToDec(hex[2]+hex[3])}, ${hexToDec(hex[4]+hex[5])}`;
+                return new QuickResult('color', { hex: hex, rgb: rgb });
+            }
+
+            // Users may input maths equations to get quick result: 
+            // The selection must contains a single "=" at the start for the function to be activated
+            else if (/^={1}[0-9.\(\)\&a-z\+\-\*\/ \,\^]+$/.test(this.currentHighlightedText))
+            {
+                let expression = this.currentHighlightedText.split("=")[1];
+                try
+                {
+                    let result = this.mexp.eval(expression, [], {});
+                    return new QuickResult('text', `${expression} = ${result}`);
+                }
+                catch(ex) { return new QuickResult('text', `Invalid Expression: ${expression}`); }
+            }
+            else return new QuickResult('text', this.currentHighlightedText);
+        },
+        selectedItemType(): string|undefined { return this.selectedItem?.getType(); }
     },
     watch:
     {
-        // activeTab: 
-        // {
-        //     handler(newVal:OpenedTab, oldVal:OpenedTab) { this.currentEditorContent = newVal.noteDoc?.content ?? ""; },
-        //     deep:true
-        // },
-        // currentEditorContent: function (newVal)
-        // {
-        //     if (this.activeTab?.noteDoc == undefined) return;
-        //     this.activeTab.noteDoc.content = newVal;
-        //     // if (this.activeTab.noteDoc.content == newVal) return;
-        //     this.activeTab.hasUnsavedChange = true;
-        // }
+        
     }
 }
 </script>
 
 <template>
-    <!-- <button @click="mainStore.logout()">Logout</button> -->
+
+    <div class="contextMenuContainer" v-if="selectedItem">
+        <div v-fixed-pos="contextMenuLocation" class="contextMenu">
+            <TempVar :define="{ 'itemType': selectedItem.getType() }" #defined="{itemType}">
+                <div v-if="itemType == 'Folder'">
+                    <div>Open</div>
+                    <div>Rename</div>
+                </div>
+                <div v-if="itemType == 'File'">
+                    <TempVar :define="{ 'fullPath': (selectedItem as FileItem).fullPath }" #defined="{fullPath}">
+                        <div @click="openNote(fullPath); closeContextMenu();">Open</div>
+                        <div @click="closeContextMenu(); renameObject(fullPath);">Rename</div>
+                    </TempVar>
+                </div>
+            </TempVar>
+        </div>
+        <div class="contextBackdrop" @click="selectedItem = undefined"></div>
+    </div>
+
     <grid-shortcut columns="minmax(15vw, 300px) 1fr" rows="1fr" class="fullSize" id="topDiv">
         <grid-shortcut columns='1fr' rows="40px 1fr 25px 25px" id="leftBar">
             <grid-shortcut id="leftBarTop" columns="40px auto 40px">
@@ -300,12 +438,14 @@ export default
                     <img class="loadingSpinner" src="@/assets/loadingIcon.png">
                 </div>
                 <div :class="{'disabled': navigator.isLoading, 'opened': isFileOpened(navigator.currentPath + file.objectName)}" 
-                v-for="file in navigator.pathFiles" @click="onFileClicked(file)">
+                v-for="file in navigator.pathFiles" @click="onFileClicked(file)" 
+                @contextmenu.prevent="onDirectoryFileClicked(file)">
                     <div class="fileName">{{ file.objectName }}</div>
                     <div class="fileIcon">
                         <span class="material-symbols-outlined icon" v-if="file.type == 'Folder'">chevron_right</span>
                     </div>
                 </div>
+                <div @contextmenu.prevent="onDirectoryClicked(navigator.currentPath)" class="directoryEmptyPart"></div>
             </div>
         </grid-shortcut>
         <grid-shortcut colums='1fr' rows="40px 1fr 30px">
@@ -322,28 +462,77 @@ export default
                     </div>
                 </div>
             </div>
-            <div id="contentArea" style="position: relative;">
+            <div id="contentArea" class="rel">
                 <div v-for="tab in openedTabs.filter(tab => tab.isActive)" :key="tab.fullFilePath" :class="{'fullSize': tab.isLoading}">
                     <div v-if="tab.isLoading" class="fullSize center">
                         <img class="loadingSpinner" src="@/assets/loadingIcon.png">
                     </div>
-                    <MdEditor :ref="tab.fullFilePath" v-if="tab.isActive && !tab.isLoading" theme="dark" 
-                        class="fullHeight fullSizeAbs noBorder" language="en-US" :onOnHtmlChanged="onPreviewChanges"
-                        @onSave="saveCurrentTab()" :sanitize="sanitizeOutputHTML" :modelValue="tab.content" :onChange="x => setContent(tab, x)"></MdEditor>
+                    <MdEditor v-selection-changed :ref="tab.fullFilePath" v-if="tab.isActive && !tab.isLoading" theme="dark" :autoDetectCode="true"
+                        class="fullHeight fullSizeAbs noBorder" language="en-US" :modelValue="tab.content"
+                        @onSave="saveCurrentTab()" :sanitize="sanitizeOutputHTML" :onChange="x => setContent(tab, x)"></MdEditor>
                 </div>
                 <div id="noticesOverlay">
-                    <div class="notice" v-for="notice in notices" :key="notice.content">
+                    <div class="notice" :class="notice.noticeType" v-for="notice in notices" :key="notice.content">
                         <div :style="{'opacity': notice.noticeOpacity}">{{ notice.content }}</div>
+                    </div>
+                </div>
+            </div>
+            <div id="footerArea">
+                <div v-if="quickResult.type == 'text'" class="text">{{ quickResult.arg }}</div>
+                <div v-if="quickResult.type == 'color'" class="color">
+                    <div class="description">#{{ quickResult.arg.hex }}, rgb({{ quickResult.arg.rgb }}):</div>
+                    <div class="colorPreviewContainer">
+                        <div :style="{'background': `#${quickResult.arg.hex}`}"></div>
                     </div>
                 </div>
             </div>
         </grid-shortcut>
     </grid-shortcut>
+
 </template>
 
 <style lang="less" scoped>
 @import "@/stylesheets/globalStyle.less";
 @import "@/stylesheets/mainTheme.less";
+
+.directoryEmptyPart 
+{ 
+    background: #01010101; width:100% !important; height:100% !important; 
+    cursor:default !important;
+    &:hover { background: #01010101 !important; }
+}
+
+.contextMenuContainer
+{
+    .fullSize; .fixed;
+    z-index:100;
+
+    & > div { .fixed; width:fit-content; }
+
+    .contextBackdrop
+    {
+        .fullSize; .fixed; cursor:default !important;
+        z-index: 101;
+    }
+
+    .contextMenu
+    {
+        position: fixed; z-index:102;
+        border:1px solid @border;
+        width:150px; height:fit-content; 
+        min-height:100px; background:@backgroundDark;
+        border-radius: 5px;
+        box-shadow: 0px 0px 10px black;
+
+        & > div > div
+        {
+            font-weight:bold;
+            .text; padding:10px; .yCenter; cursor:pointer;
+            font-size:14px; transition: all 0.1s ease-out;
+            &:hover { background:@surface; }
+        }
+    }
+}
 
 #topDiv
 {   
@@ -430,12 +619,40 @@ export default
             {
                 .fullWidth; .center; margin-bottom: 5px;
 
+                &.error > div { background:fade(@error,50%); color:brightness(@error, 50%); }
+                &.info > div { background:fade(@blue,10%); }
+                &.warning > div { background:fade(@yellow,10%); }
+
                 & > div 
                 {
                     .text; font-weight: bold; color:white; font-size:14px;
-                    padding:10px; background:fade(@blue,10%); width:fit-content; height:fit-content;
+                    padding:10px; width:fit-content; height:fit-content;
                 }
             }   
+        }
+    }
+
+    .ellipsisContainer
+    {
+        overflow:hidden; display:flex;
+        & > div { overflow:hidden; height:fit-content; white-space: nowrap; text-overflow:ellipsis; }
+    }
+
+    #footerArea
+    {
+        .ellipsisContainer; border-top: 1px solid @border; .text; .yCenter;
+        padding-left:10px; font-size:12px; 
+        
+        & * { font-family: Consolas; }
+
+        & .color
+        {
+            display:grid; grid-template-columns: auto 15px; grid-template-rows: 1fr; gap:5px;
+            & .colorPreviewContainer 
+            {
+                height: 100%; .yCenter;
+                & > div { width:10px; height:10px; } 
+            }
         }
     }
 }

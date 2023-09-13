@@ -65,9 +65,11 @@ export const useNetworkStore = defineStore(
                     "auth-username": self.cookiesStore.getCookie("username") ?? ""
                 },
                 body: JSON.stringify(body)
-            }).then(response => 
+            })
+            .then(response => 
             {
                 if (response.status == 401 && noRefresh == false) self.mainStore.logout();
+                else if (!response.ok) { return Promise.reject(response); }
                 else return response.json();
             });
         },
@@ -75,8 +77,8 @@ export const useNetworkStore = defineStore(
         {
             try
             {
-                var self = this;
-                var queryURL = `${url}`;
+                let self = this;
+                let queryURL = `${url}`;
 
                 let response = await fetch(queryURL, 
                 {
@@ -89,7 +91,7 @@ export const useNetworkStore = defineStore(
                 });
 
                 if (response.status == 401) this.mainStore.logout();
-                else if (response.status == 400) throw new Error(await response.text());
+                else if (!response.ok) return Promise.reject(response);
                 else return await response.json();
             }
             catch(ex) { console.log(ex); }
