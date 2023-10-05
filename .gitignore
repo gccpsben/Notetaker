@@ -5,6 +5,7 @@ node_modules
 /server/backup
 /server/server_build
 /server/ssl
+/server/server_production
 
 # local env files
 .env

@@ -3,10 +3,243 @@ import { useNavigator } from '@/composables/useNavigator';
 import { useNetworkStore } from '@/stores/networkStore';
 import { MdEditor } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
-import { nextTick, ref, type Ref, reactive } from 'vue';
+import { nextTick, ref, type Ref, reactive, computed } from 'vue';
 import { type FileObjectType } from '@/types';
 import sanitizeHtml from 'sanitize-html';
 import mathExp from 'math-expression-evaluator';
+import type { ComputedRef } from 'vue';
+import { useMouse } from '@/composables/useMouse';
+import { useNotices } from '@/composables/useNotices';
+import { useUserSelection } from '@/composables/useUserSelection';
+import { Selectable, useContextMenu } from '@/composables/useContextMenu';
+import { useLaggingRef } from '@/composables/useLaggingRef';
+import { unref } from 'vue';
+
+const contextMenu = useContextMenu();
+
+const networkStore = useNetworkStore();
+const navigator = useNavigator();
+const openedTabs = ref<OpenedTab[]>([]);
+const notices = useNotices();
+const userSelection = useUserSelection();
+const mexp = new mathExp();
+const mouseLocation = useMouse();
+const lastMouseLocation = useLaggingRef<{x:number, y:number}>(ref(mouseLocation));
+networkStore.connectSocket();
+
+const activeTab: ComputedRef<OpenedTab|undefined> = computed(() => { return openedTabs.value.find(x => x.isActive); });
+
+const unsavedTabPaths = computed(() => 
+{
+    let result = openedTabs.value.filter(x => x.hasUnsavedChange).map(x => x.fullFilePath);
+    console.log(result);
+    return result;
+}) as ComputedRef<String[]>;
+
+const quickResult = computed(() => 
+{   
+    let hlText = userSelection.text.value;
+
+    // ft to meters
+    if (/^[0-9.]{1,}[ ]{0,1}(ft)|(feets)|(feet)/i.test(hlText))
+    {
+        let ft = parseFloat(hlText.split(' ')[0]);
+        let r = new QuickResult('text');
+        r.arg = `${ft} feet = ${(ft * 0.3048).toFixed(2)} meter(s)`;
+        return r;
+    }
+    else if (/^#[0-9a-f]{6}$/i.test(hlText))
+    {
+        let hexToDec = (str:string) => { return parseInt(str, 16); }
+        let hex = hlText.replace("#",''); // 123456
+        let rgb = `${hexToDec(hex[0]+hex[1])}, ${hexToDec(hex[2]+hex[3])}, ${hexToDec(hex[4]+hex[5])}`;
+        return new QuickResult('color', { hex: hex, rgb: rgb });
+    }
+
+    // Users may input maths equations to get quick result: 
+    // The selection must contains a single "=" at the start for the function to be activated
+    else if (/^={1}[0-9.\(\)\&a-z\+\-\*\/ \,\^]+$/.test(hlText))
+    {
+        let expression = hlText.split("=")[1];
+        try
+        {
+            let result = mexp.eval(expression, [], {});
+            return new QuickResult('text', `${expression} = ${result}`);
+        }
+        catch(ex) { return new QuickResult('text', `Invalid Expression: ${expression}`); }
+    }
+    else return new QuickResult('text', hlText);
+
+}) as ComputedRef<QuickResult>;
+
+// const selectedItemType = computed(() => 
+// {
+//     return selectedItem.value?.getType();
+// }) as ComputedRef<string|undefined>;
+
+/**
+ * Rename an object (either a folder or a file).
+ * This method will prompt user to enter a new name.
+ * @param filePath 
+ */
+function renameObject(filePath:string)
+{
+    
+}
+
+
+function onDirectoryClicked(fullPath:string)
+{
+    lastMouseLocation.update();
+    alert(fullPath);
+}
+
+function onDirectoryFileClicked(pathItem: FileObjectType)
+{
+    lastMouseLocation.update();
+
+    if (pathItem.type == 'Folder') 
+        contextMenu.select(new FolderItem(navigator.currentPath.value + pathItem.objectName + '/'));
+    else
+        contextMenu.select(new FileItem(navigator.currentPath.value + pathItem.objectName)); // A file
+}
+
+function openNote(fullPath:string) 
+{ 
+    // see if the file is already opened
+    if (isFileOpened(fullPath))
+    { 
+        notices.push("The file is already opened!", 5000);
+        focusTab(fullPath); return; 
+    }
+
+    for (let openedTab of openedTabs.value) openedTab.isActive = false;
+    let newTab = reactive(new OpenedTab(fullPath));
+    // this.focusTab(newTab.fullFilePath);
+    openedTabs.value.push( reactive(newTab) );
+    newTab.isActive = true;
+    newTab.load(tab => 
+    { 
+        newTab.hasUnsavedChange = false; 
+        newTab.content = tab.content;
+        setContent(newTab, tab.content);
+        focusTab(newTab.fullFilePath); 
+        newTab.hasUnsavedChange = false;
+    });
+}
+
+function onFileClicked(file: FileObjectType)
+{
+    if (file.type == 'Folder') navigator.goToFolder(file.objectName);
+    else openNote(navigator.currentPath.value + file.objectName);
+}
+
+function focusTab(fullPath:string)
+{
+    let oldTab = activeTab.value;
+    let oldTabUnsaved = oldTab?.hasUnsavedChange ?? true;
+
+    let tab = openedTabs.value.find(x => x.fullFilePath == fullPath);
+    if (tab == undefined) return;
+    for (let openedTab of openedTabs.value) openedTab.isActive = false;
+    tab.isActive = true;
+
+    if (tab == undefined || oldTab == undefined) return;
+    oldTab.hasUnsavedChange = oldTabUnsaved;
+}
+
+function saveCurrentTab()
+{
+    if (activeTab.value == undefined) return;
+    if (activeTab.value.fileName == undefined) return;
+
+    let fileNameOld = activeTab.value.fileName;
+
+    let notice = notices.push(`Saving ${fileNameOld}...`);
+
+    activeTab.value.saveContent().then((data) => 
+    {
+        console.log(data);
+        notice.content.value = `Saved ${fileNameOld}!`;
+        notice.fade(5000);
+        setTimeout(() => { notices.cleanup() }, 10000); // Cleanup
+    })
+    .catch(async (response: Response) => 
+    {
+        let body = await response.json();
+        notice.noticeType = 'error';
+        if (body) notice.content.value = `Error saving ${fileNameOld}: ${body.name}`;
+        else notice.content.value = `Error saving ${fileNameOld}: ${response.status}(${response.statusText})`;
+        notice.fade(15000);
+        setTimeout(() => { notices.cleanup() }, 10000); // Cleanup
+    });
+}
+
+function sanitizeOutputHTML(inputHtml:string)
+{   
+    
+
+    let allowedTags = 
+    sanitizeHtml.defaults.allowedTags // all the default allowed tags (see https://www.npmjs.com/package/sanitize-html)
+    .concat([ 'svg', 'img', 'path' ]) // equations uses SVG, and we would like to allow images as well
+    .concat([ 'br', 'hr' ]) // we also want some styling tags
+    .concat([ 'math', 'semantics', 'mrow', 'mi', 'mo', 'msqrt', 'msup', 'mn' ]); // used by katex
+
+    let allowedAttr = 
+    {
+        '*': ['style', 'aria-hidden', 'language'], // we want to allow style on all tags
+        'svg': ['xmlns', 'width', 'height', 'viewbox', 'preserveaspectratio'], // we need these to display equations and svg,
+        'path': ['d'],
+        'img': ["src", 'alt']
+    };
+
+    let sanitizedHTML = sanitizeHtml(inputHtml, 
+    {
+        parseStyleAttributes: true,
+        allowedClasses: { '*': ['*'] },
+        allowedAttributes: allowedAttr,
+        allowedTags: allowedTags
+    });
+
+    // Inject safe events (these events are not subject to XSS attacks, since we already sanitized the input being injecting events)
+    // and the events are not based on user inputs.
+    let dom = new DOMParser().parseFromString(sanitizedHTML, "text/html");
+    dom.body.querySelectorAll(`.container_spoiler`).forEach(container => 
+    {
+        container.setAttribute("onclick", "this.classList.toggle(\"revealed\")");
+    });
+
+    return dom.body.innerHTML;
+}
+
+function setContent(tab:OpenedTab, content:string)
+{
+    if (tab == undefined) return;
+    tab.content = content;
+    tab.hasUnsavedChange = true;
+}
+
+function isFileOpened(fullPath:string)
+{
+    return openedTabs.value.find(tab => tab.fullFilePath == fullPath) != undefined;
+}
+
+function closeTab(fullPath:string)
+{
+    let tab = openedTabs.value.find(tab => tab.fullFilePath == fullPath);
+    if (tab == undefined) return console.warn(`The tab \"${fullPath}\" is not found!"`);
+    if (tab.hasUnsavedChange) 
+    { 
+        let promptMessage = `The file ${tab.fullFilePath} has unsaved changes, do you still want to close the file?`;
+        if (!confirm(promptMessage)) return; 
+    }
+    openedTabs.value = openedTabs.value.filter(tab => tab.fullFilePath != fullPath);
+}
+
+openNote("/root/Crypto/Note Crypto");
+
+
+
 </script>
 
 <script lang="ts">
@@ -44,14 +277,6 @@ export class QuickResult
         this.type = type;
         if (arg) this.arg = arg;
     }
-}
-
-/**
- * Represent a selectable item in the UI
- */
-export abstract class Selectable 
-{
-    public abstract getType():string;    
 }
 
 export class FolderItem extends Selectable
@@ -132,290 +357,26 @@ export class OpenedTab
         this.hasUnsavedChange = false;
     }   
 }
-
-export default
-{
-    mounted()
-    {
-        this.networkStore.connectSocket();
-        this.openNote("/root/Crypto/Note Crypto");
-
-        document.addEventListener("mousemove", (e) => 
-        {
-            this.mouseLocation.x = e.clientX;
-            this.mouseLocation.y = e.clientY;
-        });
-
-        document.addEventListener("selectionchange", (e) => 
-        {
-            let selection = window.getSelection();
-            if (selection == undefined) return;
-            let type = selection.type; // expect 'Range'
-
-            if (type === 'Range') this.currentHighlightedText = selection.toString();
-            else if (type === "Caret")
-            {
-                let anchorNode = selection.anchorNode;
-                this.currentHighlightedText = (anchorNode as HTMLElement).innerText || anchorNode?.nodeValue || '';
-            }
-            else this.currentHighlightedText = '';
-        });
-    },
-    data()
-    {
-        let data = 
-        {
-            networkStore: useNetworkStore(),
-            navigator: useNavigator(),
-            openedTabs: [] as OpenedTab[],
-            notices: [] as Notice[],
-            currentHighlightedText: "",
-            mexp: new mathExp(),
-            selectedItem: undefined as undefined|Selectable,
-            mouseLocation: { x:0, y:0 },
-            contextMenuLocation: { x:0, y:0 }
-        };
-        return data;
-    },
-    methods:
-    {
-        /**
-         * Rename an object (either a folder or a file).
-         * This method will prompt user to enter a new name.
-         * @param filePath 
-         */
-        renameObject(filePath:string)
-        {
-            
-        },
-        updateContextMenuLocation() 
-        { 
-            this.contextMenuLocation.x = this.mouseLocation.x;
-            this.contextMenuLocation.y = this.mouseLocation.y;
-        },
-        onDirectoryClicked(fullPath:string)
-        {
-            this.updateContextMenuLocation();
-            alert(fullPath);
-        },
-        onDirectoryFileClicked(pathItem: FileObjectType)
-        {
-            this.updateContextMenuLocation();
-            if (pathItem.type == 'Folder') this.selectedItem = new FolderItem(this.navigator.currentPath + pathItem.objectName + '/'); // A folder
-            else this.selectedItem = new FileItem(this.navigator.currentPath + pathItem.objectName); // A file
-        },
-        openNote(fullPath:string) 
-        { 
-            // see if the file is already opened
-            if (this.isFileOpened(fullPath))
-            { 
-                this.pushNotice("The file is already opened!", 5000);
-                this.focusTab(fullPath); return; 
-            }
-
-            for (let openedTab of this.openedTabs) openedTab.isActive = false;
-            let newTab = reactive(new OpenedTab(fullPath));
-            // this.focusTab(newTab.fullFilePath);
-            this.openedTabs.push( reactive(newTab) );
-            newTab.isActive = true;
-            newTab.load((tab) => 
-            { 
-                newTab.hasUnsavedChange = false; 
-                newTab.content = tab.content;
-                this.setContent(newTab, tab.content);
-                this.focusTab(newTab.fullFilePath); 
-                newTab.hasUnsavedChange = false;
-            });
-        },
-        onFileClicked(file: FileObjectType)
-        {
-            if (file.type == 'Folder') this.navigator.goToFolder(file.objectName);
-            else this.openNote(this.navigator.currentPath + file.objectName);
-        },
-        focusTab(fullPath:string)
-        {
-            let oldTab = this.activeTab;
-            let oldTabUnsaved = oldTab?.hasUnsavedChange ?? true;
-
-            let tab = this.openedTabs.find(x => x.fullFilePath == fullPath);
-            if (tab == undefined) return;
-            for (let openedTab of this.openedTabs) openedTab.isActive = false;
-            tab.isActive = true;
-
-            if (tab == undefined || oldTab == undefined) return;
-            oldTab.hasUnsavedChange = oldTabUnsaved;
-        },
-        saveCurrentTab()
-        {
-            if (this.activeTab == undefined) return;
-            if (this.activeTab.fileName == undefined) return;
-
-            let fileNameOld = this.activeTab.fileName;
-
-            let notice = this.pushNotice(`Saving ${fileNameOld}...`);
-
-            this.activeTab.saveContent().then((data) => 
-            {
-                console.log(data);
-                notice.content.value = `Saved ${fileNameOld}!`;
-                notice.fade(5000);
-                setTimeout(() => { this.cleanupNotice() }, 10000); // Cleanup
-            })
-            .catch(async (response: Response) => 
-            {
-                let body = await response.json();
-                notice.noticeType = 'error';
-                if (body) notice.content.value = `Error saving ${fileNameOld}: ${body.name}`;
-                else notice.content.value = `Error saving ${fileNameOld}: ${response.status}(${response.statusText})`;
-                notice.fade(15000);
-                setTimeout(() => { this.cleanupNotice() }, 10000); // Cleanup
-            });
-        },
-        sanitizeOutputHTML(inputHtml:string)
-        {   
-            let allowedTags = 
-            sanitizeHtml.defaults.allowedTags // all the default allowed tags (see https://www.npmjs.com/package/sanitize-html)
-            .concat([ 'svg', 'img', 'path' ]) // equations uses SVG, and we would like to allow images as well
-            .concat([ 'br', 'hr' ]) // we also want some styling tags
-            .concat([ 'math', 'semantics', 'mrow', 'mi', 'mo', 'msqrt', 'msup', 'mn' ]); // used by katex
-
-            let allowedAttr = 
-            {
-                '*': ['style', 'aria-hidden', 'language'], // we want to allow style on all tags
-                'svg': ['xmlns', 'width', 'height', 'viewbox', 'preserveaspectratio'], // we need these to display equations and svg,
-                'path': ['d']
-            };
-
-            let sanitizedHTML = sanitizeHtml(inputHtml, 
-            {
-                parseStyleAttributes: true,
-                allowedClasses: { '*': ['*'] },
-                allowedAttributes: allowedAttr,
-                allowedTags: allowedTags
-            });
-
-            // Inject safe events (these events are not subject to XSS attacks, since we already sanitized the input being injecting events)
-            // and the events are not based on user inputs.
-            let dom = new DOMParser().parseFromString(sanitizedHTML, "text/html");
-            dom.body.querySelectorAll(`.container_spoiler`).forEach(container => 
-            {
-                container.setAttribute("onclick", "this.classList.toggle(\"revealed\")");
-            });
-
-            return dom.body.innerHTML;
-        },
-
-        /**
-         * Remove all notices that opacity equals to 0
-         */
-        cleanupNotice() 
-        { 
-            this.notices = this.notices.filter(x => (x.noticeOpacity as any) != 0); 
-        },
-
-        pushNotice(content:string, timeoutMs?: number)
-        {
-            let notice = new Notice(content);
-            this.notices.push(notice as any);
-            if (timeoutMs !== undefined) notice.fade(timeoutMs);
-            setTimeout(() => { this.cleanupNotice() }, timeoutMs); // Cleanup
-            return notice;
-        },
-
-        setContent(tab:OpenedTab, content:string)
-        {
-            if (tab == undefined) return;
-            tab.content = content;
-            tab.hasUnsavedChange = true;
-        },
-
-        isFileOpened(fullPath:string)
-        {
-            return this.openedTabs.find(tab => tab.fullFilePath == fullPath) != undefined;
-        },
-
-        closeTab(fullPath:string)
-        {
-            let tab = this.openedTabs.find(tab => tab.fullFilePath == fullPath);
-            if (tab == undefined) return console.warn(`The tab \"${fullPath}\" is not found!"`);
-            if (tab.hasUnsavedChange) 
-            { 
-                let promptMessage = `The file ${tab.fullFilePath} has unsaved changes, do you still want to close the file?`;
-                if (!confirm(promptMessage)) return; 
-            }
-            this.openedTabs = this.openedTabs.filter(tab => tab.fullFilePath != fullPath);
-        },
-
-        closeContextMenu() { this.selectedItem = undefined; },
-    },
-    computed:
-    {
-        activeTab(): OpenedTab|undefined { return this.openedTabs.find(x => x.isActive); },
-        unsavedTabPaths() 
-        {
-            let result = this.openedTabs.filter(x => x.hasUnsavedChange).map(x => x.fullFilePath);
-            console.log(result);
-            return result;
-        },
-        quickResult(): QuickResult
-        {
-            // ft to meters
-            if (/^[0-9.]{1,}[ ]{0,1}(ft)|(feets)|(feet)/i.test(this.currentHighlightedText))
-            {
-                let ft = parseFloat(this.currentHighlightedText.split(' ')[0]);
-                let r = new QuickResult('text');
-                r.arg = `${ft} feet = ${(ft * 0.3048).toFixed(2)} meter(s)`;
-                return r;
-            }
-            else if (/^#[0-9a-f]{6}$/i.test(this.currentHighlightedText))
-            {
-                let hexToDec = (str:string) => { return parseInt(str, 16); }
-                let hex = this.currentHighlightedText.replace("#",''); // 123456
-                let rgb = `${hexToDec(hex[0]+hex[1])}, ${hexToDec(hex[2]+hex[3])}, ${hexToDec(hex[4]+hex[5])}`;
-                return new QuickResult('color', { hex: hex, rgb: rgb });
-            }
-
-            // Users may input maths equations to get quick result: 
-            // The selection must contains a single "=" at the start for the function to be activated
-            else if (/^={1}[0-9.\(\)\&a-z\+\-\*\/ \,\^]+$/.test(this.currentHighlightedText))
-            {
-                let expression = this.currentHighlightedText.split("=")[1];
-                try
-                {
-                    let result = this.mexp.eval(expression, [], {});
-                    return new QuickResult('text', `${expression} = ${result}`);
-                }
-                catch(ex) { return new QuickResult('text', `Invalid Expression: ${expression}`); }
-            }
-            else return new QuickResult('text', this.currentHighlightedText);
-        },
-        selectedItemType(): string|undefined { return this.selectedItem?.getType(); }
-    },
-    watch:
-    {
-        
-    }
-}
 </script>
 
 <template>
 
-    <div class="contextMenuContainer" v-if="selectedItem">
-        <div v-fixed-pos="contextMenuLocation" class="contextMenu">
-            <TempVar :define="{ 'itemType': selectedItem.getType() }" #defined="{itemType}">
-                <div v-if="itemType == 'Folder'">
-                    <div>Open</div>
-                    <div>Rename</div>
-                </div>
-                <div v-if="itemType == 'File'">
-                    <TempVar :define="{ 'fullPath': (selectedItem as FileItem).fullPath }" #defined="{fullPath}">
-                        <div @click="openNote(fullPath); closeContextMenu();">Open</div>
-                        <div @click="closeContextMenu(); renameObject(fullPath);">Rename</div>
-                    </TempVar>
-                </div>
-            </TempVar>
+    <div class="contextMenuContainer" v-if="contextMenu.hasSelected.value">
+        <div v-fixed-pos="unref(lastMouseLocation.lastValue)" class="contextMenu">
+            <div v-if="contextMenu.activeType.value === 'Folder'">
+                <TempVar :define="{ 'fullPath': (contextMenu.activeItem.value as FolderItem).fullPath }" #defined="{fullPath}">
+                    <div @click="navigator.goToPath(fullPath); contextMenu.reset();">Open</div>
+                    <div @click="contextMenu.reset(); renameObject(fullPath);">Rename</div>
+                </TempVar>
+            </div>
+            <div v-if="contextMenu.activeType.value === 'File'">
+                <TempVar :define="{ 'fullPath': (contextMenu.activeItem.value as FileItem).fullPath }" #defined="{fullPath}">
+                    <div @click="openNote(fullPath); contextMenu.reset();">Open</div>
+                    <div @click="contextMenu.reset(); renameObject(fullPath);">Rename</div>
+                </TempVar>
+            </div>
         </div>
-        <div class="contextBackdrop" @click="selectedItem = undefined"></div>
+        <div class="contextBackdrop" @click="contextMenu.reset"></div>
     </div>
 
     <grid-shortcut columns="minmax(15vw, 300px) 1fr" rows="1fr" class="fullSize" id="topDiv">
@@ -434,18 +395,17 @@ export default
             </grid-shortcut>
 
             <div id="directoryStackPanel">
-                <div id="directoryloadingCircle" v-if="navigator.isLoading">
+                <div id="directoryloadingCircle" v-if="navigator.isLoading.value">
                     <img class="loadingSpinner" src="@/assets/loadingIcon.png">
                 </div>
-                <div :class="{'disabled': navigator.isLoading, 'opened': isFileOpened(navigator.currentPath + file.objectName)}" 
-                v-for="file in navigator.pathFiles" @click="onFileClicked(file)" 
-                @contextmenu.prevent="onDirectoryFileClicked(file)">
+                <div :class="{'disabled': navigator.isLoading.value, 'opened': isFileOpened(navigator.currentPath.value + file.objectName)}" 
+                v-for="file in navigator.pathFiles.value" @click="onFileClicked(file)" @contextmenu.prevent="onDirectoryFileClicked(file)">
                     <div class="fileName">{{ file.objectName }}</div>
                     <div class="fileIcon">
                         <span class="material-symbols-outlined icon" v-if="file.type == 'Folder'">chevron_right</span>
                     </div>
                 </div>
-                <div @contextmenu.prevent="onDirectoryClicked(navigator.currentPath)" class="directoryEmptyPart"></div>
+                <div @contextmenu.prevent="onDirectoryClicked(navigator.currentPath.value)" class="directoryEmptyPart"></div>
             </div>
         </grid-shortcut>
         <grid-shortcut colums='1fr' rows="40px 1fr 30px">
@@ -472,19 +432,21 @@ export default
                         @onSave="saveCurrentTab()" :sanitize="sanitizeOutputHTML" :onChange="x => setContent(tab, x)"></MdEditor>
                 </div>
                 <div id="noticesOverlay">
-                    <div class="notice" :class="notice.noticeType" v-for="notice in notices" :key="notice.content">
+                    <div class="notice" :class="notice.noticeType" v-for="notice in notices.notices.value" :key="notice.content">
                         <div :style="{'opacity': notice.noticeOpacity}">{{ notice.content }}</div>
                     </div>
                 </div>
             </div>
             <div id="footerArea">
-                <div v-if="quickResult.type == 'text'" class="text">{{ quickResult.arg }}</div>
-                <div v-if="quickResult.type == 'color'" class="color">
-                    <div class="description">#{{ quickResult.arg.hex }}, rgb({{ quickResult.arg.rgb }}):</div>
-                    <div class="colorPreviewContainer">
-                        <div :style="{'background': `#${quickResult.arg.hex}`}"></div>
+                <TempVar :define="{ 'arg': quickResult.arg, 'type': quickResult.type }" #defined="{arg, type}">
+                    <div v-if="type == 'text'" class="text">{{ arg }}</div>
+                    <div v-if="type == 'color'" class="color">
+                        <div class="description">#{{ arg.hex }}, rgb({{ arg.rgb }}):</div>
+                        <div class="colorPreviewContainer">
+                            <div :style="{'background': `#${arg.hex}`}"></div>
+                        </div>
                     </div>
-                </div>
+                </TempVar>
             </div>
         </grid-shortcut>
     </grid-shortcut>

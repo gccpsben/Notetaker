@@ -56,9 +56,11 @@ export const fullDatabaseUrl = `mongodb+srv://${process.env.DB_USERNAME}:${proce
 
     app.use(minify());
     app.use(Express.json());
-    app.use(Express.static(publicFolderPath, {index: "index.html"}));
 
     await dbOperations.init(fullDatabaseUrl);
     await endpoints.init(app, io)
     server.listen(port, () => { logGreen(`Started listening on ${port}`); });
+
+    app.use(Express.static(publicFolderPath, { index: "index.html" }));
+    app.get("/*", (req, res) => { res.sendFile("index.html", { root: publicFolderPath }); });
 })();

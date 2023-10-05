@@ -36,6 +36,12 @@ export function useNavigator(startingPath:string = '/root/')
         await updateDirectoryFiles();
     }
 
+    async function goToPath(folderFullPath: string)
+    {
+        currentPath.value = folderFullPath;
+        await updateDirectoryFiles();
+    }
+
     function isRoot() { return currentPath.value === '/root/'; };
 
     updateDirectoryFiles();
@@ -47,6 +53,7 @@ export function useNavigator(startingPath:string = '/root/')
         isLoading, 
         updateDirectoryFiles,
         goToFolder, 
+        goToPath,
         goToParent,
         isRoot,
         currentFolderName
