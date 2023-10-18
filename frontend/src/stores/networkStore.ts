@@ -5,16 +5,25 @@ import { useRouter } from 'vue-router';
 import { Socket, io } from "socket.io-client";
 import { useMainStore } from './mainStore';
 
+export class Event<T>
+{
+    private listeners = [] as any[];
+    constructor() { }
+    subscribe(callback: (arg:T) => void) { this.listeners.push(callback); }
+    trigger(arg: T) { this.listeners.forEach(x => x(arg)); }
+}
+
 export const useNetworkStore = defineStore(
 {
     id: "networkStore",
     state: () => 
-    (
+    ( 
         {
             cookiesStore: useCookiesStore(),
             socket: undefined as undefined|Socket,
             mainStore: useMainStore(),
-            isSocketConnected: false
+            isSocketConnected: false,
+            onSocketEvent: new Event<{eventName:string, arg: any}>()
         }
     ),
     getters:
@@ -50,6 +59,10 @@ export const useNetworkStore = defineStore(
             this.socket.on('connect_error', err => onConnectionFailed(err))
             this.socket.on('disconnect', () =>{ this.isSocketConnected = false; });
             this.socket.on('connect', () =>{ this.isSocketConnected = true; });
+            this.socket.onAny((eventName, arg) => 
+            {
+                this.onSocketEvent.trigger({eventName: eventName, arg: arg});
+            });
         },
         async authPost(url:string, body:any, noRefresh=false)
         {

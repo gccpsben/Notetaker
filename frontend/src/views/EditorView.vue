@@ -26,6 +26,7 @@ const mexp = new mathExp();
 const mouseLocation = useMouse();
 const lastMouseLocation = useLaggingRef<{x:number, y:number}>(ref(mouseLocation));
 networkStore.connectSocket();
+networkStore.onSocketEvent.subscribe(socketEventHandler);
 
 const activeTab: ComputedRef<OpenedTab|undefined> = computed(() => { return openedTabs.value.find(x => x.isActive); });
 
@@ -84,14 +85,88 @@ const quickResult = computed(() =>
  */
 function renameObject(filePath:string)
 {
-    
+    if (!filePath) return console.error(`renameObject: filePath cannot be undefined.`);
+    if (networkStore.socket == undefined) return console.error(`renameObject: socket is not connected!`);
+
+    let objType = filePath.endsWith("/") ? "folder" : "note";
+    let newName = prompt("New name:");
+    if (newName === null) return; // user cancelled the dialog
+
+    if (newName?.trim() != "")
+    {
+        if (objType === 'note')
+        {
+            let notice = notices.push(`Renaming to "${newName}"...`);
+            networkStore.authPost("/api/renameNote", 
+            {
+                socketIoId: networkStore.socket.id,
+                oldFullPath: filePath,
+                newName: newName
+            })
+            .then(() => 
+            {
+                notice.content.value = "Note successfully renamed."; 
+                notice.fade(2000); 
+            })
+            .catch(async (error: Response) => 
+            {
+                let errorMessage = (await error.json()).message;
+                notice.noticeType = "error";
+                notice.content.value = `Error renaming note: ${errorMessage}`;
+                notice.fade(5000);
+            });
+        }
+    }
+    else alert(`Please enter a valid name.`);
 }
 
+async function socketEventHandler(handler: {eventName:string, arg: any})
+{
+    switch(handler.eventName)
+    {
+        case "directoryChanged":
+            await navigator.updateDirectoryFiles(); 
+            break;
+        case "noteRenamed":
+            // update the paths of all opened tabs (if needed)
+            for (let tab of openedTabs.value)
+                if (handler.arg.oldFullPath === tab.fullFilePath) 
+                {
+                    tab.fullFilePath = handler.arg.newFullPath;
+                    tab.fileName = handler.arg.newNoteName;
+                }
+            await navigator.updateDirectoryFiles(); 
+            break;
+    }
+}
 
-function onDirectoryClicked(fullPath:string)
+function createNewNote(directoryFullPath:string)
+{
+    if (networkStore.socket?.id === undefined) return;
+
+    let newNoteName = prompt("Note Name:");
+    let notice = notices.push(`Creating note "${newNoteName}"...`);
+
+    networkStore.authPost("/api/createNote", 
+    {
+        socketIoId: networkStore.socket.id,
+        name: newNoteName,
+        path: directoryFullPath
+    })
+    .then(() => { notice.fade(2000); })
+    .catch(async (error: Response) => 
+    {
+        let errorMessage = (await error.json()).message;
+        notice.noticeType = "error";
+        notice.content.value = `Error creating note: ${errorMessage}`;
+        notice.fade(5000);
+    });
+}
+
+function onDirectoryClicked()
 {
     lastMouseLocation.update();
-    alert(fullPath);
+    contextMenu.select(new FolderNavigatorItem(navigator.currentPath.value));
 }
 
 function onDirectoryFileClicked(pathItem: FileObjectType)
@@ -125,6 +200,7 @@ function openNote(fullPath:string)
         setContent(newTab, tab.content);
         focusTab(newTab.fullFilePath); 
         newTab.hasUnsavedChange = false;
+        document.title = newTab.fileName;
     });
 }
 
@@ -177,7 +253,7 @@ function saveCurrentTab()
 
 function sanitizeOutputHTML(inputHtml:string)
 {   
-    
+    return inputHtml;
 
     let allowedTags = 
     sanitizeHtml.defaults.allowedTags // all the default allowed tags (see https://www.npmjs.com/package/sanitize-html)
@@ -235,10 +311,6 @@ function closeTab(fullPath:string)
     }
     openedTabs.value = openedTabs.value.filter(tab => tab.fullFilePath != fullPath);
 }
-
-openNote("/root/Crypto/Note Crypto");
-
-
 
 </script>
 
@@ -342,7 +414,7 @@ export class OpenedTab
     public async load(onloadCallback?: (tab:OpenedTab) => void)
     {
         this.isLoading = true;
-        this.networkStore.authGet(`/api/openNote?path=${this.fullFilePath}`)
+        this.networkStore.authGet(`/api/openNote?path=${encodeURIComponent(this.fullFilePath)}`)
         .then(data => 
         {
             this.content = data.content;
@@ -353,7 +425,7 @@ export class OpenedTab
 
     public async saveContent()
     {
-        await this.networkStore.authPost(`/api/updateNote?path=${this.fullFilePath}`, { content: this.content });
+        await this.networkStore.authPost(`/api/updateNote?path=${encodeURIComponent(this.fullFilePath)}`, { content: this.content });
         this.hasUnsavedChange = false;
     }   
 }
@@ -369,10 +441,15 @@ export class OpenedTab
                     <div @click="contextMenu.reset(); renameObject(fullPath);">Rename</div>
                 </TempVar>
             </div>
-            <div v-if="contextMenu.activeType.value === 'File'">
+            <div v-else-if="contextMenu.activeType.value === 'File'">
                 <TempVar :define="{ 'fullPath': (contextMenu.activeItem.value as FileItem).fullPath }" #defined="{fullPath}">
                     <div @click="openNote(fullPath); contextMenu.reset();">Open</div>
                     <div @click="contextMenu.reset(); renameObject(fullPath);">Rename</div>
+                </TempVar>
+            </div>
+            <div v-else-if="contextMenu.activeType.value === 'FolderNavigator'">
+                <TempVar :define="{ 'fullPath': (contextMenu.activeItem.value as FileItem).fullPath }" #defined="{fullPath}">
+                    <div @click="createNewNote(navigator.currentPath.value); contextMenu.reset();">New Note</div>
                 </TempVar>
             </div>
         </div>
@@ -405,7 +482,7 @@ export class OpenedTab
                         <span class="material-symbols-outlined icon" v-if="file.type == 'Folder'">chevron_right</span>
                     </div>
                 </div>
-                <div @contextmenu.prevent="onDirectoryClicked(navigator.currentPath.value)" class="directoryEmptyPart"></div>
+                <div @contextmenu.prevent="onDirectoryClicked()" class="directoryEmptyPart"></div>
             </div>
         </grid-shortcut>
         <grid-shortcut colums='1fr' rows="40px 1fr 30px">
@@ -423,6 +500,69 @@ export class OpenedTab
                 </div>
             </div>
             <div id="contentArea" class="rel">
+                <div id="welcomeScreen" v-if="openedTabs.length == 0">
+                    <div>
+                        <div class="fullWidth center">
+                            <p id="welcomeTitle" class="tight">NOTETAKER</p>
+                        </div>
+                        <div class="fullWidth center">
+                            <img id="welcomeAppIcon" src="/appIcon.png">
+                        </div>
+                        <div class="fullWidth center">
+                            <p id="welcomeDescription">A web-based extended markdown editor, on steriod!</p>
+                        </div>
+                        <!-- <span class="material-symbols-outlined icon">note_add</span> -->
+                    </div>
+                    <div class="fullSize center">
+                        <div class="fullWidth">
+                            <div id="welcomeCtaButtonsContainer">
+                                <div class="fullWidth center">
+                                    <button class="welcomeCtaButton">
+                                        <div>
+                                            <span class="material-symbols-outlined icon">new_window</span>
+                                            <div class="fullSize xLeft yCenter tight"><p>Create a new note at root</p></div>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div class="fullWidth center">
+                                    <button class="welcomeCtaButton">
+                                        <div>
+                                            <span class="material-symbols-outlined icon">help</span>
+                                            <div class="fullSize xLeft yCenter tight"><p>Access tutorials</p></div>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div class="fullWidth center">
+                                    <button class="welcomeCtaButton">
+                                        <div>
+                                            <span class="material-symbols-outlined icon">tune</span>
+                                            <div class="fullSize xLeft yCenter tight"><p>Customize editor</p></div>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div class="fullWidth center">
+                                    <button class="welcomeCtaButton">
+                                        <div>
+                                            <span class="material-symbols-outlined icon">keyboard_command_key</span>
+                                            <div class="fullSize xLeft yCenter tight"><p>Modify keybinds</p></div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="welcomeTips" class="fullWidth center">
+                                <div>
+                                    <div id="tipsHeader">
+                                        <span class="material-symbols-outlined icon">lightbulb</span>
+                                        <div class="fullSize xLeft yCenter tight"><p>TIPS</p></div>
+                                    </div>
+                                    <div id="tipsContent">
+                                        <p>You may include iframes inside note if permission is granted!</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div v-for="tab in openedTabs.filter(tab => tab.isActive)" :key="tab.fullFilePath" :class="{'fullSize': tab.isLoading}">
                     <div v-if="tab.isLoading" class="fullSize center">
                         <img class="loadingSpinner" src="@/assets/loadingIcon.png">
@@ -482,7 +622,7 @@ export class OpenedTab
         position: fixed; z-index:102;
         border:1px solid @border;
         width:150px; height:fit-content; 
-        min-height:100px; background:@backgroundDark;
+        min-height:10px; background:@backgroundDark;
         border-radius: 5px;
         box-shadow: 0px 0px 10px black;
 
@@ -614,6 +754,77 @@ export class OpenedTab
             {
                 height: 100%; .yCenter;
                 & > div { width:10px; height:10px; } 
+            }
+        }
+    }
+
+    #welcomeScreen
+    {
+        .fullSize; .center;
+        p { .text; }
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr;
+
+        #welcomeAppIcon 
+        { 
+            margin:25px; 
+            animation-duration: 15s;
+            animation-name: appIconHueAnimation;
+            animation-iteration-count: infinite;
+        }
+        #welcomeTitle { font-size:42px; font-weight: bold; }
+        #welcomeDescription { font-weight: bold; }
+
+        @keyframes appIconHueAnimation 
+        {
+            0% { filter:hue-rotate(0deg); }    
+            50% { filter:hue-rotate(360deg); }    
+            100% { filter:hue-rotate(0deg); }
+        }
+
+        #welcomeCtaButtonsContainer
+        {
+            .welcomeCtaButton 
+            {
+                width:40%;
+                margin:15px;
+                div { display:grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr; }
+                span { margin-right:15px; }
+                p { .tight; display:inline; font-size: 16px; transform: translateY(1px); margin-right:5px; }
+                background: @backgroundDark;
+                color: @foreground;
+                padding:15px;
+                border:1px solid @border;
+                &:hover { cursor:pointer; background: @background;}
+            }
+        }
+
+        #welcomeTips
+        {
+            margin-top:25px;
+
+            #tipsHeader
+            {
+                .fullWidth; padding:15px; gap:15px;
+                display:grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr;
+                p { .tight; transform: translateY(1px); font-weight: 900; }
+                span { color: @foreground; }
+            }
+
+            #tipsContent
+            {
+                padding:25px; padding-top:5px;
+                p { .tight; transform: translateY(1px); }
+            }
+
+            & > div 
+            { 
+                width:70%;
+                background: @backgroundDark !important; 
+                display:grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto;
             }
         }
     }

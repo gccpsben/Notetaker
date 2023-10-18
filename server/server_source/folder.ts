@@ -33,7 +33,7 @@ export class FolderNotFoundError extends Error
 }
 export class PathNotFoundError extends Error 
 {
-    constructor(directory) 
+    constructor(directory:string) 
     {
         var m = `One of the nodes in ${directory} is not found.`;
         super();

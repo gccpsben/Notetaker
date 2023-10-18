@@ -7,6 +7,7 @@ import { mongoose } from '@typegoose/typegoose';
 import { FolderClass } from './folder';
 import { ObjectType, ensurePath } from './path';
 import { FileNotExistsError, NoteClass, NoteModel } from './note';
+// import * as databaseOperations from './databaseOperations';
 
 let expressInstance = undefined;
 var socketIoInstance = undefined;
@@ -108,9 +109,9 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
     setEndpoint("/api/createFolder", "POST", async (req, res, next) => 
     {
-        var folderName = req.body.name;
-        var queryPath = decodeURIComponent(req.body.path);
-        var socketIOClientID = req.body.socketIoId;
+        let folderName = req.body.name;
+        let queryPath = decodeURIComponent(req.body.path);
+        let socketIOClientID = req.body.socketIoId;
 
         if (!await checkReqSession(req,res)) { return; }
 
@@ -145,9 +146,9 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
     setEndpoint("/api/createNote", "POST", async (req, res, next) => 
     {
-        var socketIOClientID = req.body.socketIoId;
-        var noteName = req.body.name;
-        var queryPath = decodeURIComponent(req.body.path);
+        let socketIOClientID = req.body.socketIoId;
+        let noteName = req.body.name;
+        let queryPath = decodeURIComponent(req.body.path);
         
         if (!await checkReqSession(req,res)) { return; }
 
@@ -158,26 +159,19 @@ export async function init(app:Express.Express, io:socketIO.Server)
             return;
         }
 
-        databaseOperations.createNote("# **New Note**", queryPath, noteName)
-        .then((data) => 
+        NoteClass.createNewNote("# **New Note**", queryPath, noteName).then(() => 
         {
-            res.status(200);
-            res.json(data);
+            res.status(200).json({});
 
             socketIoInstance.emit("directoryChanged", 
-            {
+            { 
                 "path": queryPath,
-                "socketIdSource": socketIOClientID
+                "socketIdSource": socketIOClientID 
             });
 
             return;
         })
-        .catch(error => 
-        {
-            res.status(400);
-            res.json(error);
-            return;
-        });
+        .catch(error => { returnError(res, error); });
     });
 
     setEndpoint("/api/updateNote", "POST", async (req, res, next) => 
@@ -235,10 +229,9 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
     setEndpoint("/api/renameNote", "POST", async (req, res, next) => 
     {
-        var socketIOClientID = req.body.socketIoId;
-        var noteName = req.body.oldName;
-        var newName = req.body.newName;
-        var queryPath = decodeURIComponent(req.body.path);
+        let socketIOClientID = req.body.socketIoId;
+        let noteName = req.body.oldFullPath;
+        let newName = req.body.newName;
 
         if (!await checkReqSession(req,res)) { return; }
 
@@ -254,37 +247,28 @@ export async function init(app:Express.Express, io:socketIO.Server)
             res.json({message: "newName cannot be undefined."});
             return;
         }
-        else if (queryPath == undefined)
-        {
-            res.status(422);
-            res.json({message: "queryPath cannot be undefined."});
-            return;
-        }
 
-        databaseOperations.renameNote(queryPath, noteName, newName)
-        .then((data) => 
+        let note = await NoteClass.getNote(noteName);
+        NoteClass.rename(noteName, newName)
+        .then(() => 
         {
-            res.status(200);
-            res.json(data);
-
             socketIoInstance.emit("directoryChanged", 
-            {
-                "path": queryPath,
-                "name": noteName,
-                "type": "note",
-                "socketIdSource": socketIOClientID
+            { 
+                "path": note.directory,
+                "socketIdSource": socketIOClientID 
             });
 
             socketIoInstance.emit("noteRenamed", 
-            {
-                "path": queryPath,
-                "oldName": noteName,
-                "newName": newName,
-                "type": "note",
-                "socketIdSource": socketIOClientID
+            { 
+                "oldFullPath": noteName,
+                "newFullPath": note.directory + newName,
+                "newNoteName": newName,
+                "socketIdSource": socketIOClientID 
             });
 
-            return;
+            res.status(200);
+            res.json({});
+            res.end();
         })
         .catch(error => 
         {
