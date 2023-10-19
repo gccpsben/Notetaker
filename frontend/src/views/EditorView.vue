@@ -116,6 +116,28 @@ function renameObject(filePath:string)
                 notice.fade(5000);
             });
         }
+        else if (objType === 'folder')
+        {
+            let notice = notices.push(`Renaming to "${newName}"...`);
+            networkStore.authPost("/api/renameFolder", 
+            {
+                socketIoId: networkStore.socket.id,
+                oldFullPath: filePath,
+                newName: newName
+            })
+            .then(() => 
+            {
+                notice.content.value = "Folder successfully renamed."; 
+                notice.fade(2000); 
+            })
+            .catch(async (error: Response) => 
+            {
+                let errorMessage = (await error.json()).message;
+                notice.noticeType = "error";
+                notice.content.value = `Error renaming folder: ${errorMessage}`;
+                notice.fade(5000);
+            });
+        }
     }
     else alert(`Please enter a valid name.`);
 }
@@ -145,6 +167,8 @@ function createNewNote(directoryFullPath:string)
     if (networkStore.socket?.id === undefined) return;
 
     let newNoteName = prompt("Note Name:");
+    if (newNoteName === null || newNoteName === undefined) return;
+
     let notice = notices.push(`Creating note "${newNoteName}"...`);
 
     networkStore.authPost("/api/createNote", 
@@ -159,6 +183,29 @@ function createNewNote(directoryFullPath:string)
         let errorMessage = (await error.json()).message;
         notice.noticeType = "error";
         notice.content.value = `Error creating note: ${errorMessage}`;
+        notice.fade(5000);
+    });
+}
+
+function createNewFolder(directoryFullPath:string)
+{
+    if (networkStore.socket?.id === undefined) return;
+
+    let newFolderName = prompt("Folder Name:");
+    let notice = notices.push(`Creating folder "${newFolderName}"...`);
+
+    networkStore.authPost("/api/createFolder", 
+    {
+        socketIoId: networkStore.socket.id,
+        name: newFolderName,
+        path: directoryFullPath
+    })
+    .then(() => { notice.fade(2000); })
+    .catch(async (error: Response) => 
+    {
+        let errorMessage = (await error.json()).message;
+        notice.noticeType = "error";
+        notice.content.value = `Error creating folder: ${errorMessage}`;
         notice.fade(5000);
     });
 }
@@ -450,6 +497,7 @@ export class OpenedTab
             <div v-else-if="contextMenu.activeType.value === 'FolderNavigator'">
                 <TempVar :define="{ 'fullPath': (contextMenu.activeItem.value as FileItem).fullPath }" #defined="{fullPath}">
                     <div @click="createNewNote(navigator.currentPath.value); contextMenu.reset();">New Note</div>
+                    <div @click="createNewFolder(navigator.currentPath.value); contextMenu.reset();">New Folder</div>
                 </TempVar>
             </div>
         </div>

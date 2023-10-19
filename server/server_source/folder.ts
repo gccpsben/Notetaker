@@ -289,6 +289,10 @@ export class FolderClass
 
         if (originalFolderFullPath == "/root/") throw new Error(`The root folder may not be renamed.`);
 
+        // check if another folder has the same name in the directory
+        let duplicateFolder = await FolderModel.findOne({folderName: newName, parentFolder: getFolderParent(originalFolderFullPath)});
+        if (duplicateFolder != undefined) throw new FolderExistsError(getFolderParent(originalFolderFullPath), newName);
+
         let newFolderFullPath = getFolderParent(originalFolderFullPath) + newName + "/";
         let allDescendants = await this.getFolderDescendants(originalFolderFullPath);
 

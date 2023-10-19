@@ -5,7 +5,7 @@ import * as auth from './auth';
 import * as socketIO from 'socket.io';
 import { mongoose } from '@typegoose/typegoose';
 import { FolderClass } from './folder';
-import { ObjectType, ensurePath } from './path';
+import { ObjectType, ensurePath, getFolderParent } from './path';
 import { FileNotExistsError, NoteClass, NoteModel } from './note';
 // import * as databaseOperations from './databaseOperations';
 
@@ -109,7 +109,7 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
     setEndpoint("/api/createFolder", "POST", async (req, res, next) => 
     {
-        let folderName = req.body.name;
+        let folderName = decodeURIComponent(req.body.name);
         let queryPath = decodeURIComponent(req.body.path);
         let socketIOClientID = req.body.socketIoId;
 
@@ -122,11 +122,11 @@ export async function init(app:Express.Express, io:socketIO.Server)
             return;
         }
 
-        databaseOperations.createFolder(queryPath, folderName)
-        .then((data) => 
+        FolderClass.createFolder(queryPath, folderName)
+        .then(() => 
         {
             res.status(200);
-            res.json(data);
+            res.json({});
 
             socketIoInstance.emit("directoryChanged", 
             {
@@ -136,12 +136,7 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
             return;
         })
-        .catch(error => 
-        {
-            res.status(400);
-            res.json(error);
-            return;
-        });
+        .catch(error => { returnError(res, error); });
     })
 
     setEndpoint("/api/createNote", "POST", async (req, res, next) => 
@@ -281,16 +276,47 @@ export async function init(app:Express.Express, io:socketIO.Server)
 
     setEndpoint("/api/renameFolder", "POST", async (req, res, next) =>
     {
-        try
+        let socketIOClientID = req.body.socketIoId;
+        let folderPath = req.body.oldFullPath;
+        let newName = req.body.newName;
+
+        if (!await checkReqSession(req,res)) { return; }
+
+        if (folderPath == undefined)
         {
-            let oldFullPath = req.body.fullPath;
-            let newName = req.body.newName;
-            
-            if (!oldFullPath || !newName) throw new Error("Argument error");
-            ensurePath(oldFullPath, ObjectType.Folder);
-            
+            res.status(422);
+            res.json({message: "folderPath cannot be undefined."});
+            return;
         }
-        catch(e) { res.status(400).json(e); }       
+        else if (newName == undefined)
+        {
+            res.status(422);
+            res.json({message: "newName cannot be undefined."});
+            return;
+        }
+
+        FolderClass.rename(folderPath, newName)
+        .then(() => 
+        {
+            socketIoInstance.emit("directoryChanged", 
+            { 
+                "path": getFolderParent(folderPath) + "/",
+                "socketIdSource": socketIOClientID 
+            });
+
+            socketIoInstance.emit("folderRenamed", 
+            { 
+                "oldFullPath": folderPath,
+                "newFullPath": getFolderParent(folderPath) + newName + "/",
+                "newFolderName": newName,
+                "socketIdSource": socketIOClientID 
+            });
+
+            res.status(200);
+            res.json({});
+            res.end();
+        })
+        .catch(error => { returnError(res, error); });
     });
 
     // setEndpoint("/api/renameFolder", "POST", async (req, res, next) => 
