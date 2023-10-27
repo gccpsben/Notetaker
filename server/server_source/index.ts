@@ -13,6 +13,8 @@ import * as dbOperations from './databaseOperations';
 import * as endpoints from './endpoints';
 import { Server } from 'socket.io';
 import * as minify from 'express-minify';
+import helmet from "helmet";
+import cookieParser = require("cookie-parser");
 dotenv.config("../.env" as any) // load ./.env
 //#endregion
 
@@ -33,6 +35,12 @@ else
 export const isDevMode = process.env?.devMode == 'true';
 export const publicFolderPath = require('node:path').resolve(process.env.DIST_PATH ?? "../dist");
 export const app = Express();
+app.use(cookieParser());
+app.use(helmet(
+{ 
+    contentSecurityPolicy: false,
+    
+}));
 export const server = isSSLDefined ? require('https').createServer({ key:sslKey, cert:sslCert }, app) : require('http').createServer(app);
 export const io = new Server(server);
 export const port = process.env.PORT || 55558;
@@ -55,7 +63,7 @@ export const fullDatabaseUrl = `mongodb+srv://${process.env.DB_USERNAME}:${proce
     logGreen(`Static folder set to ${publicFolderPath}`);
 
     app.use(minify());
-    app.use(Express.json());
+    app.use(Express.json({limit: '50mb'}));
 
     await dbOperations.init(fullDatabaseUrl);
     await endpoints.init(app, io)

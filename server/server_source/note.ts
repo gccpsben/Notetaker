@@ -288,13 +288,13 @@ export class NoteClass
 }
 export const NoteModel = getModelForClass(NoteClass);
 
-@modelOptions ( { schemaOptions: { autoCreate: false , _id : false, collection: "images" }, existingConnection:dbMongoose } )
-export class ImageClass
-{
-    @prop({required:true})
-    public _id!: string;
+// @modelOptions ( { schemaOptions: { autoCreate: false , _id : false, collection: "images" }, existingConnection:dbMongoose } )
+// export class ImageClass
+// {
+//     @prop({required:true})
+//     public _id!: string;
 
-    @prop({required:true})
-    public base64!: string;
-}
-export const ImageModel = getModelForClass(ImageClass);
+//     @prop({required:true})
+//     public base64!: string;
+// }
+// export const ImageModel = getModelForClass(ImageClass);

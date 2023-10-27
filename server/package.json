@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch_server": "tsc-watch -p \"./tsconfig.json\" --onSuccess \"node server_build/index.js\"",
     "build_prod": "tsc --outDir ./server_production",
-	"run_prod" : "node server_production/index.js"
+    "run_prod": "node server_production/index.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +20,8 @@
   "dependencies": {
     "@typegoose/typegoose": "^11.4.1",
     "@types/bcrypt": "^5.0.0",
+    "@types/cookie": "^0.5.3",
+    "@types/cookie-parser": "^1.4.5",
     "@types/express": "^4.17.17",
     "@types/fs-extra": "^11.0.1",
     "@types/mongo-sanitize": "^1.0.1",
@@ -27,11 +29,14 @@
     "bcrypt": "^5.1.1",
     "chalk": "^4.1.2",
     "colors": "^1.4.0",
+    "cookie": "^0.5.0",
+    "cookie-parser": "^1.4.6",
     "dotenv": "^16.3.1",
     "dotenv-expand": "^10.0.0",
     "express": "^4.18.2",
     "express-minify": "^1.0.0",
     "fs-extra": "^11.1.1",
+    "helmet": "^7.0.0",
     "log-to-file": "^3.0.3",
     "mongo-sanitize": "^1.1.0",
     "mongodb": "^5.8.1",

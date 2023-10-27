@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useNavigator } from '@/composables/useNavigator';
 import { useNetworkStore } from '@/stores/networkStore';
-import { MdEditor } from 'md-editor-v3';
+import { MdEditor, type ExposeParam } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
 import { nextTick, ref, type Ref, reactive, computed } from 'vue';
 import { type FileObjectType } from '@/types';
@@ -14,9 +14,11 @@ import { useUserSelection } from '@/composables/useUserSelection';
 import { Selectable, useContextMenu } from '@/composables/useContextMenu';
 import { useLaggingRef } from '@/composables/useLaggingRef';
 import { unref } from 'vue';
+import { markdownRenderFunction } from '@/main';
 
+const editorRef = ref<ExposeParam>();
 const contextMenu = useContextMenu();
-
+const pastedImageBase46 = ref<string | undefined>("testing");
 const networkStore = useNetworkStore();
 const navigator = useNavigator();
 const openedTabs = ref<OpenedTab[]>([]);
@@ -77,6 +79,63 @@ const quickResult = computed(() =>
 // {
 //     return selectedItem.value?.getType();
 // }) as ComputedRef<string|undefined>;
+
+async function uploadImage()
+{
+    if (!pastedImageBase46.value) return notices.push("No image to upload!", 1000);
+
+    let randomName = makeid(5);
+    let notice = notices.push(`Uploading image "${randomName}"...`);
+
+    await networkStore.authPost(`/api/image`,
+    {
+        name: randomName,
+        base64: pastedImageBase46.value
+    })
+    .then(data => 
+    {
+        let uploadedImageName = data.name;
+        notice.content.value = `Uploaded image "${uploadedImageName}"!`;
+        notice.fade(3000);
+
+        // For some reasons, the editorRef here has a different structure than the Typescript Definitions.
+        // @ts-ignore
+        editorRef.value[0].insert(() => 
+        {
+            return { targetValue: `![New Image](api/image?name=${decodeURIComponent(uploadedImageName)})` } as any
+        });
+    })
+    .catch(async (error: Response) => 
+    {
+        try 
+        {
+            let errorMessage = (await error.json()).message;
+            notice.noticeType = "error";
+            notice.content.value = `Error uploading image: ${errorMessage}`;
+            notice.fade(10000);
+        }
+        catch(ex) 
+        {
+            let errorMessage = error;
+            notice.noticeType = "error";
+            notice.content.value = `Error uploading image: ${errorMessage}`;
+            notice.fade(10000);
+        }
+    });
+}
+
+function makeid(length: number) 
+{
+    let result = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const charactersLength = characters.length;
+    let counter = 0;
+    while (counter < length) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+      counter += 1;
+    }
+    return result;
+}
 
 /**
  * Rename an object (either a folder or a file).
@@ -300,7 +359,7 @@ function saveCurrentTab()
 
 function sanitizeOutputHTML(inputHtml:string)
 {   
-    return inputHtml;
+    // return inputHtml;
 
     let allowedTags = 
     sanitizeHtml.defaults.allowedTags // all the default allowed tags (see https://www.npmjs.com/package/sanitize-html)
@@ -316,21 +375,72 @@ function sanitizeOutputHTML(inputHtml:string)
         'img': ["src", 'alt']
     };
 
-    let sanitizedHTML = sanitizeHtml(inputHtml, 
-    {
-        parseStyleAttributes: true,
-        allowedClasses: { '*': ['*'] },
-        allowedAttributes: allowedAttr,
-        allowedTags: allowedTags
-    });
+    // let sanitizedHTML = sanitizeHtml(inputHtml, 
+    // {
+    //     parseStyleAttributes: true,
+    //     allowedClasses: { '*': ['*'] },
+    //     allowedAttributes: allowedAttr,
+    //     allowedTags: allowedTags
+    // });
 
     // Inject safe events (these events are not subject to XSS attacks, since we already sanitized the input being injecting events)
     // and the events are not based on user inputs.
-    let dom = new DOMParser().parseFromString(sanitizedHTML, "text/html");
+    let dom = new DOMParser().parseFromString(inputHtml, "text/html");
     dom.body.querySelectorAll(`.container_spoiler`).forEach(container => 
     {
         container.setAttribute("onclick", "this.classList.toggle(\"revealed\")");
     });
+
+    // Add default stylesheet
+    dom.body.innerHTML += 
+    `
+        <style>details { background: #222222; padding:5px; padding-left:15px; margin-top:5px; }</style>
+    `;
+
+    // We need to render all md tags before processing mdt tags
+    if (markdownRenderFunction)
+    {
+        dom.body.querySelectorAll("md").forEach(mdTag => 
+        {
+            let modifedHTML = mdTag.innerHTML;
+            mdTag.innerHTML = markdownRenderFunction(modifedHTML);
+        });
+    }
+
+    // Retreive all <mdt> tag
+    let mdTemplates: {[key: string]: string} = {};
+    dom.body.querySelectorAll("mdt").forEach(mdTag => 
+    {
+        let templateID = mdTag.getAttribute("templateid");
+        if (!templateID) return;
+        mdTemplates[templateID] = mdTag.innerHTML;
+        mdTag.outerHTML = ""; // remove all the mdt tags, since they are not rendered
+    });
+
+    // Render all <md> and <mdr> tag 
+    if (markdownRenderFunction)
+    {
+        let definedTemplateIDs = Object.keys(mdTemplates);
+
+        dom.body.querySelectorAll("mdr").forEach(mdTag => 
+        {
+            if (mdTag.getAttributeNames().length == 0) 
+            {
+                mdTag.innerHTML = `<p style="color:red">Please provide a templateID.</p>`;
+                return;
+            }
+
+            let templateID = mdTag.getAttributeNames()[0];
+
+            if (mdTemplates[templateID] == undefined)
+            {
+                mdTag.innerHTML = `<p style="color:red">Template with templateID \"${templateID}\" is not found!</p>`;
+                return;
+            }
+
+            mdTag.innerHTML = markdownRenderFunction(mdTemplates[templateID]);
+        });
+    }
 
     return dom.body.innerHTML;
 }
@@ -357,6 +467,29 @@ function closeTab(fullPath:string)
         if (!confirm(promptMessage)) return; 
     }
     openedTabs.value = openedTabs.value.filter(tab => tab.fullFilePath != fullPath);
+}
+
+async function onEditorPaste(event: ClipboardEvent)
+{
+    if (!event?.clipboardData) return;
+
+    let items = (event.clipboardData).items;
+    for (let item of items) 
+    {
+        if (item.kind === 'file') 
+        {
+            let blob = item.getAsFile();
+            if (!blob) return;
+            let reader = new FileReader();
+            reader.onload = function(event2)
+            {
+                if (!event2?.target) return;
+                if (!event2?.target?.result) return;
+                pastedImageBase46.value = event2.target.result.toString();
+            }; // data url!
+            reader.readAsDataURL(blob);
+        }
+    }
 }
 
 </script>
@@ -480,6 +613,25 @@ export class OpenedTab
 
 <template>
 
+    <!-- <div class="fullSize fixed center" style="background:#00000099; z-index:9999;" v-if="pastedImageBase46">
+        <div >
+            <p>Upload Image:</p>
+        </div>
+    </div> -->
+    <model @click="pastedImageBase46 = undefined" :visible="pastedImageBase46" :title="'Upload Images'">
+        <div class="fullSize" style="display:grid; grid-template-columns: 1fr; grid-template-rows: auto auto; gap:15px;">
+            <div class="fullSize xCenter">
+                <img style="background-size: contain; width:300px;" :src="pastedImageBase46"/>
+            </div>
+            <div class="xRight">
+                <div>
+                    <button @click="pastedImageBase46 = undefined" class="modelButton">Cancel</button>
+                    <button @click="uploadImage" class="modelButton">Upload</button>
+                </div>
+            </div>
+        </div>
+    </model>
+
     <div class="contextMenuContainer" v-if="contextMenu.hasSelected.value">
         <div v-fixed-pos="unref(lastMouseLocation.lastValue)" class="contextMenu">
             <div v-if="contextMenu.activeType.value === 'Folder'">
@@ -547,7 +699,7 @@ export class OpenedTab
                     </div>
                 </div>
             </div>
-            <div id="contentArea" class="rel">
+            <div id="contentArea" @paste="onEditorPaste" class="rel">
                 <div id="welcomeScreen" v-if="openedTabs.length == 0">
                     <div>
                         <div class="fullWidth center">
@@ -615,7 +767,7 @@ export class OpenedTab
                     <div v-if="tab.isLoading" class="fullSize center">
                         <img class="loadingSpinner" src="@/assets/loadingIcon.png">
                     </div>
-                    <MdEditor v-selection-changed :ref="tab.fullFilePath" v-if="tab.isActive && !tab.isLoading" theme="dark" :autoDetectCode="true"
+                    <MdEditor v-selection-changed ref="editorRef" v-if="tab.isActive && !tab.isLoading" theme="dark" :autoDetectCode="true"
                         class="fullHeight fullSizeAbs noBorder" language="en-US" :modelValue="tab.content"
                         @onSave="saveCurrentTab()" :sanitize="sanitizeOutputHTML" :onChange="x => setContent(tab, x)"></MdEditor>
                 </div>
@@ -682,6 +834,18 @@ export class OpenedTab
             &:hover { background:@surface; }
         }
     }
+}
+
+.modelButton 
+{
+    .tight;
+    padding:5px;
+    color: @foreground;
+    margin-left:5px;
+    cursor: pointer;
+    background:@backgroundDark;
+    border: 1px solid @border;
+    &:hover { background: @surface; }
 }
 
 #topDiv
