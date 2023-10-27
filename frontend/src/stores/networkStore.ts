@@ -47,14 +47,7 @@ export const useNetworkStore = defineStore(
                 this.mainStore.logout(); // clear all cookies and redirect to auth screen
             };
 
-            this.socket = io(
-            {
-                auth:
-                {
-                    token: token,
-                    username: username
-                }
-            });
+            this.socket = io({ withCredentials: true });
 
             this.socket.on('connect_error', err => onConnectionFailed(err))
             this.socket.on('disconnect', () =>{ this.isSocketConnected = false; });
@@ -74,8 +67,8 @@ export const useNetworkStore = defineStore(
                 method: "POST", headers: 
                 { 
                     'Content-Type': 'application/json',
-                    "authorization": self.cookiesStore.getCookie("token") ?? "",
-                    "auth-username": self.cookiesStore.getCookie("username") ?? ""
+                    // "authorization": self.cookiesStore.getCookie("token") ?? "",
+                    // "auth-username": self.cookiesStore.getCookie("username") ?? ""
                 },
                 body: JSON.stringify(body)
             })
@@ -98,8 +91,8 @@ export const useNetworkStore = defineStore(
                     method: "GET",
                     headers: 
                     {
-                        "authorization": self.cookiesStore.getCookie("token") ?? "",
-                        "auth-username": self.cookiesStore.getCookie("username") ?? ""
+                        // "authorization": self.cookiesStore.getCookie("token") ?? "",
+                        // "auth-username": self.cookiesStore.getCookie("username") ?? ""
                     }
                 });
 

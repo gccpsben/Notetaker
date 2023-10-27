@@ -4,8 +4,10 @@ import * as bcrypt from 'bcrypt';
 import { getModelForClass, modelOptions, prop } from '@typegoose/typegoose';
 import { dbMongoose } from './databaseOperations';
 
-const saltRounds = 10;
-const sessionsExpireMs = 2.592e+9; // 30d
+export const saltRounds = 10;
+export const sessionsExpireMs = 2.592e+9; // 30d
+export const authTokenCookieName = `notes_token`;
+export const authUsernameCookieName = `username`;
 
 @modelOptions ( { schemaOptions: { autoCreate: false , _id:false }, existingConnection:dbMongoose } )
 export class Token
@@ -167,7 +169,7 @@ export function isPasswordPass (passwordRaw)
 //         if (accDoc == undefined) return undefined;
 //         if (await bcrypt.compare(pwRaw, accDoc.passwordHash) == false) return undefined;
 //         else 
-//         {
+//         { 
 //             var token = crypto.randomUUID();
 //             // await db.dbInstance.collection("accounts").updateOne(
 //             // {

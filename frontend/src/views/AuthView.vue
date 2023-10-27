@@ -17,7 +17,7 @@ export default
     mounted()
     {
         let get = this.cookiesStore.getCookie;
-        if (get("jwt") || get("token") || get("username")) this.$router.push("/editor");
+        if (get("notes_token") || get("username")) this.$router.push("/editor");
     },
     data()
     {

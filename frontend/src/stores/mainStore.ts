@@ -100,8 +100,6 @@ export const useMainStore = defineStore(
             .then(dataJSON => 
             {
                 if (dataJSON == undefined) return;
-                cookiesStore.setCookie("token", dataJSON.token, 7);
-                cookiesStore.setCookie("username", username, 7);
                 window.location.reload();
             });
         },

@@ -8,7 +8,7 @@ import { logGreen, logRed, logYellow } from './extendedLog';
 export let dbMongoose = undefined;
 export async function init (connectionUrlString:string)
 {
-    dbMongoose = mongoose.connect(connectionUrlString, {dbName: "dev"});
+    dbMongoose = await mongoose.connect(connectionUrlString, {dbName: "dev"});
     logYellow("Validating file tree...");
     
     if (await validateTree()) logGreen(`Tree clean. ${(await FolderModel.find()).length} folders and ${(await NoteModel.find()).length} notes found!`);

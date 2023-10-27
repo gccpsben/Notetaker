@@ -16,6 +16,8 @@
     "html-dom-parser": "^4.0.0",
     "jsdom": "^22.1.0",
     "markdown-it-container": "^3.0.0",
+    "markdown-it-expandable": "^1.0.2",
+    "markdown-it-multimd-table": "^4.2.3",
     "markdown-it-named-code-blocks": "^0.2.0",
     "math-expression-evaluator": "^2.0.3",
     "md-editor-v3": "^4.4.0",
